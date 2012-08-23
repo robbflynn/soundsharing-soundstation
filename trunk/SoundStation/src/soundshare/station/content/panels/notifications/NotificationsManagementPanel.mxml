@@ -1,0 +1,219 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Panel xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx"
+		 width="600"
+		 height="500"
+		 title="Notifications">
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.controls.Alert;
+			import mx.core.FlexGlobals;
+			import mx.managers.CursorManager;
+			import mx.managers.PopUpManager;
+			
+			import soundshare.station.content.panels.notifications.renderers.JointToGroupReguestRenderer;
+			import soundshare.station.content.panels.notifications.renderers.events.JointToGroupReguestRendererEvent;
+			import soundshare.station.data.StationContext;
+			import soundshare.station.data.PanelsContext;
+			import soundshare.station.data.channels.ChannelContext;
+			import soundshare.station.data.groups.GroupData;
+			import soundshare.station.data.notifications.NotificationData;
+			import soundshare.station.managers.account.events.AccountManagerEvent;
+			import soundshare.sdk.data.platlists.PlaylistContext;
+			import soundshare.sdk.db.mongo.base.events.MongoDBRestEvent;
+			import soundshare.sdk.db.mongo.groups.GroupsDataManager;
+			
+			import spark.components.Application;
+			import spark.events.RendererExistenceEvent;
+			
+			import utils.collection.CollectionUtil;
+			
+			[Bindable] private var context:StationContext;
+			[Bindable] private var panelsContext:PanelsContext;
+			
+			public function init(context:StationContext, panelsContext:PanelsContext):void
+			{
+				this.context = context;
+				this.panelsContext = panelsContext;
+				
+				this.context.accountManager.addEventListener(AccountManagerEvent.NEW_NOTIFICATION_MESSAGE, onNotificationMessage);
+			}
+			
+			private function onNotificationMessage(e:AccountManagerEvent):void
+			{
+				trace("-onNotificationMessage-");
+				var notificationData:NotificationData = new NotificationData();
+				notificationData.readObject(e.data.notification);
+				
+				context.notifications.addItem(notificationData);
+			}
+			
+			public function show():void
+			{
+				PopUpManager.addPopUp(this, FlexGlobals.topLevelApplication as Application, true);
+				PopUpManager.centerPopUp(this);
+			}
+			
+			protected function close():void
+			{
+				PopUpManager.removePopUp(this);
+			}
+			
+			private function itemRendererFunction(item:Object):IFactory
+			{
+				/* if (item is RemoteChannelContext)
+					return new ClassFactory(PlaylistChannelRenderer); */
+				
+				return new ClassFactory(JointToGroupReguestRenderer);
+			}
+			
+			protected function addRender(e:RendererExistenceEvent):void
+			{
+				var renderer:JointToGroupReguestRenderer = e.renderer as JointToGroupReguestRenderer;
+				var nd:NotificationData = e.data as NotificationData;
+				var groupData:GroupData = CollectionUtil.getItemFromCollection("_id", nd.groupId, context.groups) as GroupData;
+				
+				renderer.addEventListener(JointToGroupReguestRendererEvent.ALLOW, onAllow);
+				renderer.addEventListener(JointToGroupReguestRendererEvent.DENY, onDeny);
+				renderer.addEventListener(JointToGroupReguestRendererEvent.BROWSE, onBrowse);
+				
+				if (groupData)
+					switch (groupData.type)
+					{
+						case 0:
+							renderer.groupInfo = 'Request to joint in "' + groupData.name + '" user group.';
+							break;
+						case 1:
+							var channelContext:ChannelContext = CollectionUtil.getItemFromCollection("_id", groupData.ownerId, context.channels) as ChannelContext;
+							
+							renderer.groupInfo = 'Request to joint in "' + channelContext.name + '" channel group.';
+							break;
+						case 2:
+							var playlistContext:PlaylistContext = CollectionUtil.getItemFromCollection("_id", groupData.ownerId, context.playlists) as PlaylistContext;
+							
+							renderer.groupInfo = 'Request to joint in "' + playlistContext.name + '" playlist group.';
+							break;
+					}
+			}
+			
+			protected function removeRender(e:RendererExistenceEvent):void
+			{
+				e.currentTarget.removeEventListener(JointToGroupReguestRendererEvent.ALLOW, onAllow);
+				e.currentTarget.removeEventListener(JointToGroupReguestRendererEvent.DENY, onDeny);
+				e.currentTarget.removeEventListener(JointToGroupReguestRendererEvent.BROWSE, onBrowse);
+			}
+			
+			private var tmpNotificationData:NotificationData;
+			
+			private function onAllow(e:JointToGroupReguestRendererEvent):void
+			{
+				trace("-onAllow-");
+				
+				enabled = false;
+				CursorManager.setBusyCursor();
+				
+				tmpNotificationData = e.notificationData;
+				
+				var groupsDataManager:GroupsDataManager = context.groupsDataManagersBuilder.build();
+				groupsDataManager.addEventListener(MongoDBRestEvent.COMPLETE, onJoinComplete);
+				groupsDataManager.addEventListener(MongoDBRestEvent.ERROR, onJoinError);
+				groupsDataManager.jointToGroup(tmpNotificationData._id);
+			}
+			
+			private function onJoinComplete(e:MongoDBRestEvent):void
+			{
+				trace("-onJoinComplete-");
+				
+				e.currentTarget.removeEventListener(MongoDBRestEvent.COMPLETE, onJoinComplete);
+				e.currentTarget.removeEventListener(MongoDBRestEvent.ERROR, onJoinError);
+				
+				context.groupsDataManagersBuilder.destroy(e.currentTarget as GroupsDataManager);
+				
+				context.notifications.removeItemAt(context.notifications.getItemIndex(tmpNotificationData));
+				tmpNotificationData = null;
+				
+				enabled = true;
+				CursorManager.removeBusyCursor();
+				
+				Alert.show("Join to group complete!");
+			}
+			
+			private function onJoinError(e:MongoDBRestEvent):void
+			{
+				trace("-onJoinError-");
+				
+				e.currentTarget.removeEventListener(MongoDBRestEvent.COMPLETE, onJoinComplete);
+				e.currentTarget.removeEventListener(MongoDBRestEvent.ERROR, onJoinError);
+				
+				context.groupsDataManagersBuilder.destroy(e.currentTarget as GroupsDataManager);
+				tmpNotificationData = null;
+				
+				enabled = true;
+				CursorManager.removeBusyCursor();
+				
+				Alert.show("Error join to group!");
+			}
+			
+			private function onDeny(e:JointToGroupReguestRendererEvent):void
+			{
+				trace("-onDeny-");
+			}
+			
+			private function onBrowse(e:JointToGroupReguestRendererEvent):void
+			{
+				panelsContext.accountDataPanel.show();
+				panelsContext.accountDataPanel.setData(e.notificationData.senderId);
+			}
+			
+		]]>
+	</fx:Script>
+	
+	<s:VGroup width="100%" height="100%" paddingBottom="15" paddingLeft="15" paddingRight="15" paddingTop="15">
+		
+		<!--<s:Group width="100%">
+			<s:HGroup verticalAlign="middle">
+				<s:Button label="Add channel" click="addChannel()" />
+			</s:HGroup>
+		</s:Group>-->
+		
+		<s:Group width="100%" height="100%">
+			<s:Rect width="100%" height="100%">
+				<s:fill>
+					<s:SolidColor color="0xe9e9e9" />
+				</s:fill>
+			</s:Rect>
+			
+			<s:Rect width="100%" height="100%">
+				<s:stroke>
+					<s:SolidColorStroke color="0xb7babc" />
+				</s:stroke>
+			</s:Rect>
+			
+			<s:VGroup width="100%" height="100%" paddingBottom="5" paddingLeft="5" paddingRight="5" paddingTop="5">
+				<s:Scroller width="100%" height="100%">
+					<s:Group>
+						<s:List id="notificationsGrid" width="100%" dataProvider="{context.notifications}" 
+								itemRendererFunction="{itemRendererFunction}"
+								rendererAdd="addRender(event)"
+								rendererRemove="removeRender(event)"
+								borderVisible="false"
+								contentBackgroundAlpha="0">
+							<s:layout>
+								<s:VerticalLayout variableRowHeight="true" gap="5" />
+							</s:layout>
+						</s:List>
+					</s:Group>
+				</s:Scroller>
+			</s:VGroup>
+			
+		</s:Group>
+		
+		<s:HGroup>
+			<s:Button label="Close" click="close()" />
+		</s:HGroup>
+		
+	</s:VGroup>
+	
+</s:Panel>

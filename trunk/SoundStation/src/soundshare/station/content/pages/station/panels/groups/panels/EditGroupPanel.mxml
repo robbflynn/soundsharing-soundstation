@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Panel xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx"
+		 title="Edit playlist">
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.controls.Alert;
+			import mx.core.FlexGlobals;
+			import mx.managers.PopUpManager;
+			
+			import soundshare.sdk.db.mongo.base.events.MongoDBRestEvent;
+			import soundshare.sdk.db.mongo.groups.GroupsDataManager;
+			import soundshare.station.data.StationContext;
+			import soundshare.station.data.groups.GroupData;
+			
+			import spark.components.Application;
+			
+			[Bindable] private var context:StationContext;
+			[Bindable] private var genres:ArrayCollection = new ArrayCollection();
+			
+			private var groupData:GroupData;
+			private var tmpObject:Object;
+			
+			public function init(context:StationContext):void
+			{
+				this.context = context;
+			}
+			
+			public function setData(value:GroupData):void
+			{
+				groupData = value;
+				
+				nameTxt.text = groupData.name;
+				infoTxt.text = groupData.info;
+			}
+			
+			protected function onEdit():void
+			{
+				var groupsDataManager:GroupsDataManager = context.groupsDataManagersBuilder.build();
+				
+				groupsDataManager.addEventListener(MongoDBRestEvent.COMPLETE, onEditPlaylistComplete);
+				groupsDataManager.addEventListener(MongoDBRestEvent.ERROR, onEditPlaylistError);
+				groupsDataManager.updateRecord(groupData._id, context.sessionId, {
+					name: nameTxt.text,
+					info: infoTxt.text
+				});
+			}
+			
+			private function onEditPlaylistComplete(e:MongoDBRestEvent):void
+			{
+				e.currentTarget.removeEventListener(MongoDBRestEvent.COMPLETE, onEditPlaylistComplete);
+				e.currentTarget.removeEventListener(MongoDBRestEvent.ERROR, onEditPlaylistError);
+				
+				context.groupsDataManagersBuilder.destroy(e.currentTarget as GroupsDataManager);
+				
+				groupData.readObject(e.data);
+				context.groups.refresh();
+				
+				close();
+			}
+			
+			private function onEditPlaylistError(e:MongoDBRestEvent):void
+			{
+				e.currentTarget.removeEventListener(MongoDBRestEvent.COMPLETE, onEditPlaylistComplete);
+				e.currentTarget.removeEventListener(MongoDBRestEvent.ERROR, onEditPlaylistError);
+				
+				context.groupsDataManagersBuilder.destroy(e.currentTarget as GroupsDataManager);
+				
+				Alert.show("Error!");
+			}
+			
+			public function show():void
+			{
+				PopUpManager.addPopUp(this, FlexGlobals.topLevelApplication as Application, true);
+				PopUpManager.centerPopUp(this);
+			}
+			
+			protected function close():void
+			{
+				PopUpManager.removePopUp(this);
+			}
+			
+		]]>
+	</fx:Script>
+	
+	<s:VGroup paddingBottom="15" paddingLeft="15" paddingTop="20" paddingRight="15">
+		
+		<s:Label text="Name:" />
+		<s:TextInput id="nameTxt" width="350" />
+		
+		<s:Label text="Info:" paddingTop="10"/>
+		<s:TextArea id="infoTxt" width="350" height="80" />
+		
+		<s:HGroup paddingTop="15">
+			<s:Button label="Save" click="onEdit()" />
+			<s:Button label="Cancel" click="close()" />
+		</s:HGroup>
+		
+	</s:VGroup>
+	
+</s:Panel>

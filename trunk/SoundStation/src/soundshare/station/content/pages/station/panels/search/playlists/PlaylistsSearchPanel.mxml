@@ -1,0 +1,160 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx" 
+		 xmlns:paginators="soundshare.station.components.paginators.*"
+		 currentState="result">
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.controls.Alert;
+			import mx.managers.CursorManager;
+			
+			import soundshare.sdk.db.mongo.base.events.MongoDBRestEvent;
+			import soundshare.sdk.db.mongo.playlists.PlaylistsDataManager;
+			import soundshare.station.data.StationContext;
+			import soundshare.station.data.PanelsContext;
+			import soundshare.sdk.data.platlists.PlaylistContext;
+			
+			[Bindable] private var context:StationContext;
+			[Bindable] private var panelsContext:PanelsContext;
+			
+			[Bindable] private var playlists:ArrayCollection = new ArrayCollection();
+			
+			private var tmpPlaylistsDataManager:PlaylistsDataManager;
+			
+			public function init(context:StationContext, panelsContext:PanelsContext):void
+			{
+				this.context = context;
+				this.panelsContext = panelsContext;
+			}
+			
+			protected function startSearching():void
+			{
+				currentState = "searching";
+				playlists.removeAll();
+				
+				tmpPlaylistsDataManager = context.playlistsDataManagersBuilder.build();
+				tmpPlaylistsDataManager.addEventListener(MongoDBRestEvent.COMPLETE, onChannelsListComplete);
+				tmpPlaylistsDataManager.addEventListener(MongoDBRestEvent.ERROR, onChannelsListError);
+				tmpPlaylistsDataManager.getRecordsList();
+			}
+			
+			protected function stopSearching():void
+			{
+				tmpPlaylistsDataManager.removeEventListener(MongoDBRestEvent.COMPLETE, onChannelsListComplete);
+				tmpPlaylistsDataManager.removeEventListener(MongoDBRestEvent.ERROR, onChannelsListError);
+				
+				tmpPlaylistsDataManager.close();
+				tmpPlaylistsDataManager = null;
+				
+				currentState = "result";
+			}
+			
+			private function onChannelsListComplete(e:MongoDBRestEvent):void
+			{
+				e.currentTarget.removeEventListener(MongoDBRestEvent.COMPLETE, onChannelsListComplete);
+				e.currentTarget.removeEventListener(MongoDBRestEvent.ERROR, onChannelsListError);
+				
+				context.playlistsDataManagersBuilder.destroy(e.currentTarget as PlaylistsDataManager);
+				
+				var collection:Array = e.data as Array;
+				
+				trace("onChannelsListComplete:", collection.length);
+				
+				for (var i:int = 0;i < collection.length;i ++)
+				{
+					var playlistContext:PlaylistContext = new PlaylistContext();
+					playlistContext.readObject(collection[i])
+					
+					playlists.addItem(playlistContext);
+				}
+				
+				currentState = "result";
+				tmpPlaylistsDataManager = null;
+			}
+			
+			private function onChannelsListError(e:MongoDBRestEvent):void
+			{
+				e.currentTarget.removeEventListener(MongoDBRestEvent.COMPLETE, onChannelsListComplete);
+				e.currentTarget.removeEventListener(MongoDBRestEvent.ERROR, onChannelsListError);
+				
+				context.playlistsDataManagersBuilder.destroy(e.currentTarget as PlaylistsDataManager);
+				
+				currentState = "result";
+				tmpPlaylistsDataManager = null;
+				
+				Alert.show("Error result!");
+			}
+			
+			private function listenPlaylist():void
+			{
+				if (playlistsGrid.selectedItem)
+				{
+					panelsContext.playlistPlayerPanel.show();
+					panelsContext.playlistPlayerPanel.setData(playlistsGrid.selectedItem as PlaylistContext);
+				}
+			}
+			
+			//**************************************************************************************************************
+			//**************************************************************************************************************
+			//**************************************************************************************************************
+			
+			private function typeLabelFunc(item:Object, column:DataGridColumn):String 
+			{
+				return context.playlistTypes[item.type];
+			}
+			
+			private function genreLabelFunc(item:Object, column:DataGridColumn):String 
+			{
+				return item.genre ? String(item.genre).split(",").join(", ") : "Unknown";
+			}
+			
+		]]>
+	</fx:Script>
+	
+	<s:states>
+		<s:State name="searching" />
+		<s:State name="result" />
+	</s:states>
+	
+	<s:VGroup width="100%" height="100%" paddingBottom="10" paddingLeft="10" paddingRight="10" paddingTop="10">
+		
+		<s:HGroup>
+			<s:TextInput id="searchTxt" width="350" />
+			<s:Button label="Search" click="startSearching()" includeIn="result" />
+			<s:Button label="Stop" click="stopSearching()" includeIn="searching" />
+			<s:Button label="Listen playlist" click="listenPlaylist()" 
+					  enabled="{playlistsGrid.selectedItem &amp;&amp; playlistsGrid.selectedItem.status == 1}" />
+		</s:HGroup>
+		
+		<s:Group width="100%" height="100%">
+			<s:VGroup width="100%" height="100%">
+				<mx:DataGrid id="playlistsGrid" dataProvider="{playlists}" width="100%" height="100%"
+							 doubleClickEnabled="true"
+							 doubleClick="listenPlaylist()">
+					<mx:columns>
+						<mx:DataGridColumn dataField="name" headerText="Name"  />
+						<mx:DataGridColumn labelFunction="genreLabelFunc" headerText="Genre"  />
+						<mx:DataGridColumn labelFunction="typeLabelFunc" headerText="Type" textAlign="center" width="80"/>
+						<mx:DataGridColumn dataField="total" headerText="Total" textAlign="center" width="120"/>
+					</mx:columns>
+				</mx:DataGrid>
+				
+				<paginators:Paginator />
+			</s:VGroup>
+			
+			<s:Group width="100%" height="100%" includeIn="searching">
+				<s:Rect width="100%" height="100%">
+					<s:fill>
+						<s:SolidColor color="0xFFFFFF" alpha="0.5" />
+					</s:fill>
+				</s:Rect>
+			</s:Group>
+			
+		</s:Group>
+		
+	</s:VGroup>
+	
+</s:Group>

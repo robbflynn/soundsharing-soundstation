@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Panel xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx"
+		 title="Select playlist"
+		 width="700" height="400">
+	
+	<fx:Script>
+		<![CDATA[
+			import content.pages.station.panels.playlists.panels.renderers.GenreRender;
+			
+			import data.ApplicationContext;
+			import data.channels.ChannelContext;
+			import data.platlists.PlaylistContext;
+			
+			import managers.channels.events.ChannelsManagerEvent;
+			
+			import mx.collections.ArrayCollection;
+			import mx.controls.Alert;
+			import mx.managers.PopUpManager;
+			
+			[Bindable] private var context:ApplicationContext;
+			[Bindable] private var playlistCollection:ArrayCollection = new ArrayCollection();
+			
+			public function init(context:ApplicationContext):void
+			{
+				this.context = context;
+			}
+			
+			public function setData(value:Array):void
+			{
+				playlistCollection.source = value;
+			}
+			
+			protected function close():void
+			{
+				PopUpManager.removePopUp(this);
+			}
+
+			protected function select():void
+			{
+				dispatchEvent(new Event(Event.SELECT));
+				close();
+			}
+			
+			public function get path():String
+			{
+				return String(songsGrid.selectedItem.path);
+			}
+			
+			//**************************************************************************************************************
+			//**************************************************************************************************************
+			//**************************************************************************************************************
+			
+			private function nameLabelFunc(item:Object, column:DataGridColumn):String 
+			{
+				if (!item.metadata && !item.metadata.name)
+					return "Unknown";
+				
+				return item.metadata.name;
+			}
+			
+			private function typeLabelFunc(item:Object, column:DataGridColumn):String 
+			{
+				if (!item.settings)
+					return "Unknown";
+				
+				return item.settings.type == 0 ? "public" : "private";
+			}
+			
+			private function totalLabelFunc(item:Object, column:DataGridColumn):String 
+			{
+				if (!item.metadata)
+					return "Unknown";
+				
+				if (!item.metadata.total)
+					return "Empty";
+				
+				return item.metadata.total;
+			}
+			
+			private function genreLabelFunc(item:Object, column:DataGridColumn):String 
+			{
+				if (!item.metadata || !item.metadata.genre)
+					return "Unknown";
+				
+				return String(item.metadata.genre).split(",").join(", ");
+			}
+
+		]]>
+	</fx:Script>
+	
+	<s:VGroup width="100%" height="100%" paddingBottom="15" paddingLeft="15" paddingTop="20" paddingRight="15">
+		<mx:DataGrid id="songsGrid" dataProvider="{playlistCollection}" width="100%" height="100%"
+					 doubleClickEnabled="true"
+					 doubleClick="select()">
+			<mx:columns>
+				<mx:DataGridColumn dataField="path" headerText="Path" />
+			</mx:columns>
+		</mx:DataGrid>
+		
+		<s:HGroup>
+			<s:Button label="Select" click="select()"/>
+			<s:Button label="Cancel" click="close()" />
+		</s:HGroup>
+		
+	</s:VGroup>
+	
+</s:Panel>

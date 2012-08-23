@@ -1,0 +1,286 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:WindowedApplication xmlns:fx="http://ns.adobe.com/mxml/2009" 
+					   xmlns:s="library://ns.adobe.com/flex/spark" 
+					   xmlns:mx="library://ns.adobe.com/flex/mx"
+					   width="1024"
+					   height="768"
+					   showStatusBar="false"
+					   currentState="init"
+					   initialize="init()"
+					   applicationComplete="onApplicationComplete()"
+					   xmlns:indicators="soundshare.station.components.indicators.*" 
+					   xmlns:connection="soundshare.station.content.pages.connection.*" 
+					   xmlns:login="soundshare.station.content.pages.login.*" 
+					   xmlns:register="soundshare.station.content.pages.register.*" 
+					   xmlns:station="soundshare.station.content.pages.station.*" 
+					   xmlns:settings="soundshare.station.content.settings.*" 
+					   xmlns:panels="soundshare.station.content.pages.station.panels.stations.panels.*">
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.controls.Alert;
+			import mx.events.CloseEvent;
+			
+			import socket.client.events.FlashSocketClientEvent;
+			import socket.json.JSONFacade;
+			
+			import soundshare.station.content.pages.station.panels.servers.ServersManagementPanel;
+			import soundshare.station.content.pages.station.panels.stations.StationsManagementPanel;
+			import soundshare.station.content.panels.notifications.NotificationsManagementPanel;
+			import soundshare.station.content.settings.SettingsPanel;
+			import soundshare.station.controllers.station.StationController;
+			import soundshare.station.controllers.station.events.StationControllerEvent;
+			import soundshare.station.data.StationContext;
+			import soundshare.station.data.PanelsContext;
+			import soundshare.station.data.stations.StationData;
+			import soundshare.station.managers.account.events.AccountManagerEvent;
+			import soundshare.station.utils.debuger.Debuger;
+			
+			import spark.events.IndexChangeEvent;
+			
+			[Bindable] private var tabs:ArrayCollection = new ArrayCollection([
+				{title: "Manage channels", state: "channels"}, 
+				{title: "Manage playlists", state: "playlists"}, 
+				{title: "Manage groups", state: "groups"},
+				{title: "Search", state: "search"}
+			]);
+			
+			[Bindable] private var context:StationContext;
+			[Bindable] private var stationData:StationData;
+			
+			private var panelsContext:PanelsContext;
+			
+			private var stationController:StationController;
+			
+			private var settingsPanel:SettingsPanel;
+			private var notificationsManagementPanel:NotificationsManagementPanel;
+			
+			private var stationsManagementPanel:StationsManagementPanel;
+			private var serversManagementPanel:ServersManagementPanel;
+			
+			public function init():void
+			{
+				trace(File.applicationStorageDirectory.resolvePath("").nativePath);
+				
+				JSONFacade.parseFn = JSON.parse;
+				JSONFacade.stringifyFn = JSON.stringify;
+				
+				context = new StationContext();
+				panelsContext = new PanelsContext();
+				panelsContext.context = context;
+				
+				stationController = new StationController(context);
+				stationController.addEventListener(FlashSocketClientEvent.CONNECTED, onConnected);
+				stationController.addEventListener(FlashSocketClientEvent.DISCONNECTED, onDisconnected);
+				stationController.addEventListener(StationControllerEvent.EMITTER_READY, onEmitterReady);
+				stationController.addEventListener(StationControllerEvent.EMITTER_ERROR, onEmitterError);
+				stationController.addEventListener(StationControllerEvent.EMITTER_INVALID_STATION, onInvalidStation);
+				stationController.addEventListener(StationControllerEvent.EMITTER_STATION_DOWN_COMPLETE, onStationDown);
+				
+				context.stationController = stationController;
+				
+				notificationsManagementPanel = new NotificationsManagementPanel();
+				notificationsManagementPanel.init(context, panelsContext);
+				
+				stationsManagementPanel = new StationsManagementPanel();
+				stationsManagementPanel.init(context);
+				
+				serversManagementPanel = new ServersManagementPanel();
+				serversManagementPanel.init(context);
+				
+				settingsPanel = new SettingsPanel();
+				settingsPanel.init(context);
+				settingsPanel.addEventListener(Event.COMPLETE, onChangeGlobalSettings);
+				
+				context.accountManager.addEventListener(AccountManagerEvent.NEW_NOTIFICATION_MESSAGE, onNotificationMessage);
+				context.accountManager.addEventListener(AccountManagerEvent.SHUT_DOWN_STATION, onShutDownStation);
+				
+				currentState = "login";
+				contentContainer.visible = true;
+			}
+			
+			protected function onApplicationComplete():void
+			{
+				Debuger.getInstance().init(stage);
+			}
+			
+			protected function onChangeGlobalSettings(e:Event):void
+			{
+				context.stationController.reset();
+				currentState = "login";
+			}
+			
+			// *************************************************************************************************************************
+			
+			protected function onEditSettings(e:CloseEvent):void 
+			{
+				settingsPanel.show();
+			}
+			
+			// *************************************************************************************************************************
+			
+			protected function onConnected(e:FlashSocketClientEvent):void 
+			{
+				onlineIndicator.online = true;
+			}
+			
+			protected function onDisconnected(e:FlashSocketClientEvent):void 
+			{
+				currentState = "login";
+				onlineIndicator.online = false;
+			}
+			
+			private function onEmitterError(e:StationControllerEvent):void
+			{
+				switch (e.errorCode)
+				{
+					case 101:
+						Alert.show("Invalid username or password!");		
+						break;
+					case 105:
+						currentState = "stationSettings";
+						Alert.show("Unable to start this station!");		
+						break;
+					default:
+						currentState = "login";
+						Alert.show("Unexpected error please login again!");
+						break
+				}
+			}
+			
+			private function onInvalidStation(e:StationControllerEvent):void
+			{
+				stationData = null;
+				currentState = "stationSettings";
+			}
+			
+			private function onStationDown(e:StationControllerEvent):void
+			{
+				stationData = null;
+				currentState = "stationSettings";
+			}
+			
+			private function onEmitterReady(e:StationControllerEvent):void
+			{
+				trace("*-------------------------- onEmitterReady -----------------------------*");
+				
+				currentState = "station";
+				stationData = context.stationData;
+			}
+			
+			// *************************************************************************************************************************
+			
+			protected function showNotifications():void
+			{
+				notificationsManagementPanel.show();
+				notificationBtn.errorString = "";
+			}
+			
+			protected function showSettings():void
+			{
+				settingsPanel.show();
+			}
+			
+			protected function showStations():void
+			{
+				stationsManagementPanel.show();
+			}
+			
+			protected function showServers():void
+			{
+				serversManagementPanel.show();
+			}
+			
+			// *************************************************************************************************************************
+			
+			private function onNotificationMessage(e:AccountManagerEvent):void
+			{
+				trace("-onNotificationMessage-");
+				
+				notificationBtn.errorString = "You have new notification!";
+			}
+			
+			private function onShutDownStation(e:AccountManagerEvent):void
+			{
+				nativeWindow.close();
+			}
+			
+			protected function onStationSettingsComplete():void
+			{
+				context.stationController.stationUp();
+			}
+			
+			protected function onSelectTab(event:IndexChangeEvent):void
+			{
+				stationPanel.currentState = tab.selectedItem.state;
+			}
+			
+		]]>
+	</fx:Script>	
+	
+	<s:states>
+		<s:State name="init" />
+		<s:State name="initializing" />
+		<s:State name="login" />
+		<s:State name="register" />
+		<s:State name="loadingData" />
+		<s:State name="stationSettings" />
+		<s:State name="station" />
+	</s:states>
+	
+	<s:VGroup id="contentContainer" visible="false" width="100%" height="100%" gap="0">
+		<s:Group width="100%" height="60">
+			
+			<s:Rect width="100%" height="100%">
+				<s:fill>
+					<s:SolidColor color="0x333333" />
+				</s:fill>
+			</s:Rect>
+			
+			<s:HGroup left="10" verticalCenter="0" verticalAlign="middle">
+				<indicators:OnlineIndicator id="onlineIndicator" />
+			</s:HGroup>
+			
+			
+			<s:Label text="{stationData.name}" fontSize="15" color="0xFFFFFF" fontWeight="bold" horizontalCenter="0" verticalCenter="-11" />
+			
+			<s:TabBar id="tab" dataProvider="{tabs}" labelField="title" 
+					  horizontalCenter="0" bottom="0" includeIn="station"
+					  change="onSelectTab(event)" />
+			
+			<s:HGroup right="10" verticalCenter="0">
+				<s:Button id="notificationBtn" label="Notifications" includeIn="station"
+						  click="showNotifications()" />
+				<s:Button label="Stations" 
+						  click="showStations()" />
+				<s:Button label="Servers" 
+						  click="showServers()" />
+				<s:Button label="Settings" 
+						  click="showSettings()" />
+			</s:HGroup>
+			
+			
+		</s:Group>
+		
+		<s:Group width="100%" height="100%">
+			
+			<login:LoginPanel id="loginPanel" includeIn="login, init" horizontalCenter="0" verticalCenter="0" 
+							  creationComplete="loginPanel.init(context)"
+							  register="currentState='register';"/>
+			
+			<register:RegisterPanel id="registerPanel" includeIn="register, init" horizontalCenter="0" verticalCenter="0" 
+									creationComplete="registerPanel.init(context)"
+									login="currentState='login';"
+									registred="currentState='login';"/>
+			
+			<settings:StationSettingsPanel id="stationSettingsPanel" includeIn="stationSettings, init" horizontalCenter="0" verticalCenter="0" 
+										   creationComplete="stationSettingsPanel.init(context)"
+										   complete="onStationSettingsComplete()"/>
+			
+			<station:StationPanel id="stationPanel" includeIn="station, init" horizontalCenter="0" verticalCenter="0" 
+								  initialize="stationPanel.init(context, panelsContext);"/>
+			
+		</s:Group>
+		
+	</s:VGroup>
+</s:WindowedApplication>

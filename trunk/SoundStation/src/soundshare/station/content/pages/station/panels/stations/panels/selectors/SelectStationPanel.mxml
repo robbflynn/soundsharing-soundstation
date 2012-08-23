@@ -1,0 +1,153 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Panel xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx"
+		 title="Select station"
+		 width="700" height="400">
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.controls.Alert;
+			import mx.core.FlexGlobals;
+			import mx.managers.PopUpManager;
+			
+			import soundshare.station.content.pages.station.panels.stations.panels.selectors.renderers.StationSelectorRenderer;
+			import soundshare.station.content.pages.station.panels.stations.panels.selectors.renderers.events.StationSelectorRendererEvent;
+			import soundshare.station.data.StationContext;
+			import soundshare.station.data.stations.StationData;
+			import soundshare.sdk.db.mongo.base.events.MongoDBRestEvent;
+			import soundshare.sdk.db.mongo.stations.StationsDataManager;
+			import soundshare.sdk.managers.stations.StationsManager;
+			
+			import spark.components.Application;
+			import spark.events.RendererExistenceEvent;
+			
+			[Bindable] private var context:StationContext;
+			
+			private var selectedGroups:ArrayCollection;
+			
+			public function init(context:StationContext):void
+			{
+				this.context = context;
+			}
+			
+			public function show():void
+			{
+				PopUpManager.addPopUp(this, FlexGlobals.topLevelApplication as Application, true);
+				PopUpManager.centerPopUp(this);
+			}
+			
+			protected function close():void
+			{
+				PopUpManager.removePopUp(this);
+				dispatchEvent(new Event(Event.CANCEL));
+			}
+			
+			protected function hide():void
+			{
+				PopUpManager.removePopUp(this);
+			}
+
+			protected function addRender(e:RendererExistenceEvent):void
+			{
+				(e.renderer as StationSelectorRenderer).addEventListener(StationSelectorRendererEvent.SELECT, onSelectStation);
+				(e.renderer as StationSelectorRenderer).addEventListener(StationSelectorRendererEvent.DELETE, onDeleteStation);
+				(e.renderer as StationSelectorRenderer).addEventListener(StationSelectorRendererEvent.SHUT_DOWN, onShutDownStation);
+			}
+			
+			protected function removeRender(e:RendererExistenceEvent):void
+			{
+				(e.renderer as StationSelectorRenderer).removeEventListener(StationSelectorRendererEvent.SELECT, onSelectStation);
+				(e.renderer as StationSelectorRenderer).removeEventListener(StationSelectorRendererEvent.DELETE, onDeleteStation);
+				(e.renderer as StationSelectorRenderer).removeEventListener(StationSelectorRendererEvent.SHUT_DOWN, onShutDownStation);
+			}
+			
+			protected function onSelectStation(e:StationSelectorRendererEvent):void
+			{
+				hide();
+				dispatchEvent(new Event(Event.SELECT));
+			}
+			
+			private function onDeleteStation(e:StationSelectorRendererEvent):void
+			{
+				var stationsDataManager:StationsDataManager = context.stationsDataManagersBuilder.build();
+				
+				stationsDataManager.addEventListener(MongoDBRestEvent.COMPLETE, onRemoveStationComplete);
+				stationsDataManager.addEventListener(MongoDBRestEvent.ERROR, onRemoveStationError);
+				stationsDataManager.deleteRecord(context.sessionId, {_id: e.stationData._id});
+			}
+			
+			private function onRemoveStationComplete(e:MongoDBRestEvent):void
+			{
+				trace("onRemoveStationComplete:");
+				
+				e.currentTarget.removeEventListener(MongoDBRestEvent.COMPLETE, onRemoveStationComplete);
+				e.currentTarget.removeEventListener(MongoDBRestEvent.ERROR, onRemoveStationError);
+				
+				context.stationsDataManagersBuilder.destroy(e.currentTarget as StationsDataManager);
+				
+				context.stations.removeItemAt(context.stations.getItemIndex(stationsGrid.selectedItem));
+				context.stations.refresh();
+				
+				Alert.show("Station is deleted!");
+			}
+			
+			private function onRemoveStationError(e:MongoDBRestEvent):void
+			{
+				e.currentTarget.removeEventListener(MongoDBRestEvent.COMPLETE, onRemoveStationComplete);
+				e.currentTarget.removeEventListener(MongoDBRestEvent.ERROR, onRemoveStationError);
+				
+				context.stationsDataManagersBuilder.destroy(e.currentTarget as StationsDataManager);
+				
+				Alert.show("Error delete!");
+			}
+			
+			protected function onShutDownStation(e:StationSelectorRendererEvent):void
+			{
+				var stationsManager:StationsManager = context.stationsManagersBuilder.build();
+				stationsManager.shutDownStation(e.stationData._id);
+				
+				context.stationsManagersBuilder.destroy(stationsManager);
+			}
+			
+			public function get stationData():StationData
+			{
+				return stationsGrid.selectedItem as StationData;
+			}
+			
+		]]>
+	</fx:Script>
+	
+	<s:VGroup width="100%" height="100%" paddingBottom="15" paddingLeft="15" paddingTop="20" paddingRight="15">
+		
+		<s:Scroller width="100%" height="100%">
+			<s:Group>
+				<s:List id="stationsGrid" width="100%" dataProvider="{context.stations}"
+						itemRenderer="soundshare.station.content.pages.station.panels.stations.panels.selectors.renderers.StationSelectorRenderer"
+						rendererAdd="addRender(event)"
+						rendererRemove="removeRender(event)"
+						borderVisible="false">
+					<s:layout>
+						<s:VerticalLayout />
+					</s:layout>
+				</s:List>
+			</s:Group>
+		</s:Scroller>
+		
+		
+		<!--<mx:DataGrid id="stationsGrid" dataProvider="{context.stations}" width="100%" height="100%"
+					 doubleClickEnabled="true"
+					 doubleClick="select()">
+			<mx:columns>
+				<mx:DataGridColumn dataField="name" headerText="Name"  />
+			</mx:columns>
+		</mx:DataGrid>-->
+		
+		<s:HGroup>
+			<s:Button label="Cancel" click="close()" />
+		</s:HGroup>
+		
+	</s:VGroup>
+	
+</s:Panel>

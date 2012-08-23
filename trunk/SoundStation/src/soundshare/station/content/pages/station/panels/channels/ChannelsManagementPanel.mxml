@@ -1,0 +1,307 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx">
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.controls.Alert;
+			import mx.events.CollectionEvent;
+			
+			import soundshare.station.content.pages.station.panels.channels.panels.AddChannelPanel;
+			import soundshare.station.content.pages.station.panels.channels.panels.EditChannelPanel;
+			import soundshare.station.content.pages.station.panels.channels.panels.broadcast.radio.StandardRadioBroadcastPanel;
+			import soundshare.station.content.pages.station.panels.channels.panels.invitations.SendChannelInvitationsPanel;
+			import soundshare.station.content.pages.station.panels.channels.renderers.channel.ChannelRenderer;
+			import soundshare.station.content.pages.station.panels.channels.renderers.channel.events.ChannelRendererEvent;
+			import soundshare.station.content.pages.station.panels.channels.renderers.playlist.PlaylistChannelRenderer;
+			import soundshare.station.content.pages.station.panels.channels.renderers.playlist.events.PlaylistChannelRendererEvent;
+			import soundshare.station.data.StationContext;
+			import soundshare.station.data.PanelsContext;
+			import soundshare.station.data.channels.ChannelContext;
+			import soundshare.station.data.channels.RemoteChannelContext;
+			import soundshare.station.data.groups.GroupData;
+			import soundshare.sdk.db.mongo.base.events.MongoDBRestEvent;
+			import soundshare.sdk.db.mongo.channels.ChannelsDataManager;
+			
+			import spark.events.RendererExistenceEvent;
+			
+			import utils.collection.CollectionUtil;
+			
+			[Bindable] private var context:StationContext;
+			[Bindable] private var channelsCollection:ArrayCollection = new ArrayCollection();
+			
+			private var addChannelPanel:AddChannelPanel;
+			private var editChannelPanel:EditChannelPanel;
+			
+			private var standardRadioBroadcastPanel:StandardRadioBroadcastPanel;
+			private var sendChannelInvitationsPanel:SendChannelInvitationsPanel;
+			
+			public function init(context:StationContext, panelsContext:PanelsContext):void
+			{
+				this.context = context;
+				
+				addChannelPanel = new AddChannelPanel();
+				addChannelPanel.init(context, panelsContext);
+				
+				editChannelPanel = new EditChannelPanel();
+				editChannelPanel.init(context, panelsContext);
+				
+				standardRadioBroadcastPanel = new StandardRadioBroadcastPanel();
+				standardRadioBroadcastPanel.init(context);
+				
+				sendChannelInvitationsPanel = new SendChannelInvitationsPanel();
+				sendChannelInvitationsPanel.init(context);
+				
+				context.channels.addEventListener(CollectionEvent.COLLECTION_CHANGE, onCollectionChange);
+				
+				channelsCollection.source = context.channels.source;
+				channelsCollection.filterFunction = filterFunction;
+				channelsCollection.refresh();
+			}
+			
+			private function onCollectionChange(e:CollectionEvent):void
+			{
+				channelsCollection.refresh();
+			}
+			
+			//**************************************************************************************************************
+			//**************************************************************************************************************
+			
+			private function getChannels():void
+			{
+				var channelsDataManager:ChannelsDataManager = context.channelsDataManagersBuilder.build();
+				
+				channelsDataManager.addEventListener(MongoDBRestEvent.COMPLETE, onChannelsListComplete);
+				channelsDataManager.addEventListener(MongoDBRestEvent.ERROR, onChannelsListError);
+				channelsDataManager.getRecordsList({accountId: context.accountData._id});
+			}
+			
+			private function onChannelsListComplete(e:MongoDBRestEvent):void
+			{
+				//trace("onChannelsListComplete:", e.collection.length);
+				
+				e.currentTarget.removeEventListener(MongoDBRestEvent.COMPLETE, onChannelsListComplete);
+				e.currentTarget.removeEventListener(MongoDBRestEvent.ERROR, onChannelsListError);
+				
+				context.channelsDataManagersBuilder.destroy(e.currentTarget as ChannelsDataManager);
+				context.channels.removeAll();
+				
+				var cd:Object;
+				var collection:Array = e.data as Array;
+				
+				for (var i:int = 0;i < collection.length;i ++)
+				{
+					var channelContext:ChannelContext = new ChannelContext();
+					channelContext.readObject(collection[i])
+					
+					context.channels.addItem(channelContext);
+				}
+			}
+			
+			private function onChannelsListError(e:MongoDBRestEvent):void
+			{
+				e.currentTarget.removeEventListener(MongoDBRestEvent.COMPLETE, onChannelsListComplete);
+				e.currentTarget.removeEventListener(MongoDBRestEvent.ERROR, onChannelsListError);
+				
+				Alert.show("Error list!");
+			}
+			
+			protected function addChannel():void
+			{
+				addChannelPanel.show();
+				addChannelPanel.setData(stationsCb.selectedItem._id);
+			}
+			
+			private function broadcast():void
+			{
+				var channelContext:ChannelContext = channelsGrid.selectedItem as ChannelContext;
+				
+				trace("-broadcast-", channelContext.broadcastType);
+				
+				switch (channelContext.broadcastType)
+				{
+					case 0:
+						standardRadioBroadcastPanel.setData(channelsGrid.selectedItem as ChannelContext);
+						standardRadioBroadcastPanel.show();
+						break;
+				}
+			}
+			
+			//**************************************************************************************************************
+			//**************************************************************************************************************
+			//**************************************************************************************************************
+			
+			
+			protected function addRender(e:RendererExistenceEvent):void
+			{
+				if (e.renderer is ChannelRenderer)
+				{
+					(e.renderer as ChannelRenderer).addEventListener(ChannelRendererEvent.EDIT, onEditChannel);
+					(e.renderer as ChannelRenderer).addEventListener(ChannelRendererEvent.BROADCAST, onBroadcastChannel);
+					(e.renderer as ChannelRenderer).addEventListener(ChannelRendererEvent.INVATE, onInviteChannel);
+					(e.renderer as ChannelRenderer).addEventListener(ChannelRendererEvent.DELETE, onDeleteChannel);
+				}
+				else
+				if (e.renderer is PlaylistChannelRenderer)
+				{
+					(e.renderer as PlaylistChannelRenderer).addEventListener(PlaylistChannelRendererEvent.CLOSE, onCloseChannel);
+				}
+			}
+			
+			protected function removeRender(e:RendererExistenceEvent):void
+			{
+				if (e.renderer is ChannelRenderer)
+				{
+					(e.renderer as ChannelRenderer).removeEventListener(ChannelRendererEvent.EDIT, onEditChannel);
+					(e.renderer as ChannelRenderer).removeEventListener(ChannelRendererEvent.BROADCAST, onBroadcastChannel);
+					(e.renderer as ChannelRenderer).removeEventListener(ChannelRendererEvent.INVATE, onInviteChannel);
+					(e.renderer as ChannelRenderer).removeEventListener(ChannelRendererEvent.DELETE, onDeleteChannel);
+				}
+				else
+				if (e.renderer is PlaylistChannelRenderer)
+				{
+					(e.renderer as PlaylistChannelRenderer).removeEventListener(PlaylistChannelRendererEvent.CLOSE, onCloseChannel);
+				}
+			}
+			
+			protected function onEditChannel(e:ChannelRendererEvent):void
+			{
+				context.selectedChannel = e.channelContext;
+				editChannelPanel.show();
+			}
+			
+			private var tmpId:String;
+			
+			protected function onDeleteChannel(e:ChannelRendererEvent):void
+			{
+				var channelsDataManager:ChannelsDataManager = context.channelsDataManagersBuilder.build();
+				
+				tmpId = e.channelContext._id;
+				
+				channelsDataManager.addEventListener(MongoDBRestEvent.COMPLETE, onRemoveChannelComplete);
+				channelsDataManager.addEventListener(MongoDBRestEvent.ERROR, onRemoveChannelError);
+				channelsDataManager.deleteRecord(context.sessionId, {_id: e.channelContext._id});
+			}
+			
+			private function onRemoveChannelComplete(e:MongoDBRestEvent):void
+			{
+				e.currentTarget.removeEventListener(MongoDBRestEvent.COMPLETE, onRemoveChannelComplete);
+				e.currentTarget.removeEventListener(MongoDBRestEvent.ERROR, onRemoveChannelError);
+				
+				context.channelsDataManagersBuilder.destroy(e.currentTarget as ChannelsDataManager);
+				
+				context.channels.removeItemAt(context.channels.getItemIndex(channelsGrid.selectedItem));
+				context.channels.refresh();
+				
+				var groupData:GroupData = CollectionUtil.getItemFromCollection("ownerId", tmpId, context.groups) as GroupData;
+				
+				if (groupData)
+				{
+					context.groups.removeItemAt(context.groups.getItemIndex(groupData));
+					context.groups.refresh();
+				}
+			}
+			
+			private function onRemoveChannelError(e:MongoDBRestEvent):void
+			{
+				e.currentTarget.removeEventListener(MongoDBRestEvent.COMPLETE, onRemoveChannelComplete);
+				e.currentTarget.removeEventListener(MongoDBRestEvent.ERROR, onRemoveChannelError);
+				
+				Alert.show("Unable to remove channel!");
+			}
+			
+			protected function onCloseChannel(e:PlaylistChannelRendererEvent):void
+			{
+				trace("-onCloseChannel-");
+				
+				e.remoteChannelContext.pluginManager.destroy();
+			}
+			
+			protected function onBroadcastChannel(e:ChannelRendererEvent):void
+			{
+				trace("-onBroadcastChannel-", e.channelContext.plugin);
+				
+				if (e.channelContext.plugin)
+				{
+					context.selectedChannel = e.channelContext;
+					context.pluginsBuilder.buildBroadcaster(e.channelContext.plugin.pluginId);
+				}
+				
+				/*standardRadioBroadcastPanel.show();
+				standardRadioBroadcastPanel.setData(e.channelContext);*/
+			}
+			
+			protected function onInviteChannel(e:ChannelRendererEvent):void
+			{
+				sendChannelInvitationsPanel.show();
+				sendChannelInvitationsPanel.setData(e.channelContext);
+			}
+			
+			private function itemRendererFunction(item:Object):IFactory
+			{
+				if (item is RemoteChannelContext)
+					return new ClassFactory(PlaylistChannelRenderer);
+				
+				return new ClassFactory(ChannelRenderer);
+			}
+			
+			protected function onListenersChange(event:Event):void
+			{
+				context.applicationSettings.settings.maxListeners = listenersNs.value;
+				context.applicationSettings.save();
+			}
+			
+			private function filterFunction(item:Object):Boolean
+			{
+				if (!stationsCb.selectedItem)
+					return false;
+				
+				return item.stationId == context.applicationSettings.settings.channelsStationId;
+			}
+			
+			protected function refreshChannels():void
+			{
+				context.applicationSettings.settings.channelsStationId = stationsCb.selectedItem._id;
+				context.applicationSettings.settings.channelsStationIndex = stationsCb.selectedIndex;
+				context.applicationSettings.save();
+				
+				context.channels.refresh();
+			}
+			
+		]]>
+	</fx:Script>
+	
+	<s:VGroup width="100%" height="100%" paddingBottom="10" paddingLeft="10" paddingRight="10" paddingTop="10">
+		
+		<s:Group width="100%">
+			<s:HGroup verticalAlign="middle">
+				<s:Button label="Add channel" click="addChannel()" />
+				<s:Label text="Station:" paddingLeft="20" paddingTop="2"/>
+				<s:ComboBox id="stationsCb" dataProvider="{context.stations}" labelField="name" 
+							selectedIndex="{context.applicationSettings.settings.channelsStationIndex}"
+							change="refreshChannels()"/>
+			</s:HGroup>
+			
+			<s:HGroup verticalAlign="middle" right="0">
+				<s:Label text="Max listeners channels:" paddingTop="2"/>
+				<s:NumericStepper id="listenersNs" value="{context.applicationSettings.settings.maxListeners}" 
+								  width="100" stepSize="1" minimum="0" maximum="100"
+								  change="onListenersChange(event)" />
+			</s:HGroup>
+		</s:Group>
+		
+		<s:List id="channelsGrid" width="100%" dataProvider="{channelsCollection}" 
+				itemRendererFunction="{itemRendererFunction}"
+				rendererAdd="addRender(event)"
+				rendererRemove="removeRender(event)"
+				borderVisible="false">
+			<s:layout>
+				<s:VerticalLayout />
+			</s:layout>
+		</s:List>
+		
+	</s:VGroup>
+	
+</s:Group>

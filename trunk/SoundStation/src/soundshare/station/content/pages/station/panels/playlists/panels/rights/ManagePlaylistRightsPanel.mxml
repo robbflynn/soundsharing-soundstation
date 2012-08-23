@@ -1,0 +1,167 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Panel xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx"
+		 title="Standard broadcast settings">
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.core.FlexGlobals;
+			import mx.managers.PopUpManager;
+			
+			import soundshare.station.content.pages.station.panels.groups.panels.selector.SelectGroupPanel;
+			import soundshare.station.data.StationContext;
+			import soundshare.station.data.PanelsContext;
+			import soundshare.station.data.groups.GroupData;
+			import soundshare.sdk.data.platlists.PlaylistContext;
+			
+			import spark.components.Application;
+				
+			[Bindable] private var context:StationContext;
+			[Bindable] private var panelsContext:PanelsContext;
+			
+			[Bindable] private var selectedGroups:ArrayCollection = new ArrayCollection();
+			
+			private var _playlistContext:PlaylistContext;
+			
+			public function get playlistContext():PlaylistContext
+			{
+				return _playlistContext;
+			}
+			
+			public function init(context:StationContext, panelsContext:PanelsContext):void
+			{
+				this.context = context;
+				this.panelsContext = panelsContext;
+			}
+			
+			public function setData(value:PlaylistContext):void
+			{
+				_playlistContext = value;
+				
+				selectedGroups.removeAll();
+				
+				trace("setData:", playlistContext, playlistContext.groups);
+				
+				if (playlistContext && playlistContext.groups)
+				{
+					var groupData:GroupData;
+					
+					for (var i:int = 0;i < playlistContext.groups.length;i ++)
+					{
+						groupData = getGroupById(playlistContext.groups[i]);
+						selectedGroups.addItem(groupData);
+					}
+				}
+				
+				/* selectedGroups.filterFunction = filterFunction;
+				selectedGroups.refresh(); */
+			}
+			
+			private function getGroupById(id:String):GroupData
+			{
+				for (var i:int = 0;i < context.groups.length;i ++)
+					if ((context.groups.getItemAt(i) as GroupData)._id == id)
+						return context.groups.getItemAt(i) as GroupData;
+				
+				return null;
+			}
+			
+			public function show():void
+			{
+				PopUpManager.addPopUp(this, FlexGlobals.topLevelApplication as Application, true);
+				PopUpManager.centerPopUp(this);
+			}
+			
+			/* private function filterFunction(item:Object):Boolean
+			{
+				return item.type == 0;
+			} */
+			
+			public function close():void
+			{
+				PopUpManager.removePopUp(this);
+			}
+			
+			private function save():void
+			{
+				/* selectedGroups.filterFunction = null;
+				selectedGroups.refresh(); */
+
+				var groups:Array = new Array();
+				
+				for (var i:int = 0;i < selectedGroups.length;i ++)
+					groups.push((selectedGroups.getItemAt(i) as GroupData)._id);
+				
+				playlistContext.groups = groups;
+				trace("groups:", groups);
+				dispatchEvent(new Event(Event.COMPLETE));
+				close();
+			}
+			
+			//**************************************************************************************************************
+			//										Broadcast settings functions
+			//**************************************************************************************************************
+			
+			protected function selectGroup():void
+			{
+				panelsContext.selectGroupPanel.show();
+				panelsContext.selectGroupPanel.addEventListener(Event.SELECT, onSelectGroup);
+				panelsContext.selectGroupPanel.addEventListener(Event.CANCEL, onCancelGroup);
+				panelsContext.selectGroupPanel.setData(selectedGroups);
+			}
+			
+			private function onSelectGroup(e:Event):void
+			{
+				e.currentTarget.removeEventListener(Event.SELECT, onSelectGroup);
+				e.currentTarget.removeEventListener(Event.CANCEL, onCancelGroup);
+				
+				selectedGroups.addItem((e.currentTarget as SelectGroupPanel).groupData);
+			}
+			
+			private function onCancelGroup(e:Event):void
+			{
+				e.currentTarget.removeEventListener(Event.SELECT, onSelectGroup);
+				e.currentTarget.removeEventListener(Event.CANCEL, onCancelGroup);
+			}
+
+			protected function removeGroup():void
+			{
+				var index:int = selectedGroups.getItemIndex(groupsGrid.selectedItem);
+				
+				selectedGroups.removeItemAt(index);
+				selectedGroups.refresh();
+			}
+			
+		]]>
+	</fx:Script>
+	
+	<s:VGroup paddingBottom="15" paddingLeft="15" paddingTop="20" paddingRight="15">
+		
+		<s:VGroup>
+			
+			<s:Label text="Groups:" paddingTop="10"/>
+			
+			<mx:DataGrid id="groupsGrid" dataProvider="{selectedGroups}" width="450" 
+						 rowCount="6">
+				<mx:columns>
+					<mx:DataGridColumn dataField="name" headerText="Name"  />
+				</mx:columns>
+			</mx:DataGrid>
+			
+			<s:HGroup>
+				<s:Button label="Add group" click="selectGroup()" />
+				<s:Button label="Delete group" click="removeGroup()" enabled="{groupsGrid.selectedItem &amp;&amp; groupsGrid.selectedItem.deletable}" />
+			</s:HGroup>
+			
+		</s:VGroup>
+		
+		<s:HGroup paddingTop="10">
+			<s:Button label="OK" click="save()" />
+			<s:Button label="Cancel" click="close()" />
+		</s:HGroup>
+		
+	</s:VGroup>
+	
+</s:Panel>

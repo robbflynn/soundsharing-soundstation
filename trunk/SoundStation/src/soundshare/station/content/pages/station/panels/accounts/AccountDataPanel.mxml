@@ -1,0 +1,189 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Panel xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx" 
+		 width="900"
+		 height="600"
+		 title="User data" xmlns:info="soundshare.station.content.pages.station.panels.accounts.panels.info.*" xmlns:channels="soundshare.station.content.pages.station.panels.accounts.panels.channels.*" xmlns:playlists="soundshare.station.content.pages.station.panels.accounts.panels.playlists.*" xmlns:groups="soundshare.station.content.pages.station.panels.accounts.panels.groups.*">
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.controls.Alert;
+			import mx.core.FlexGlobals;
+			import mx.managers.PopUpManager;
+			
+			import soundshare.sdk.db.mongo.accounts.AccountsDataManager;
+			import soundshare.sdk.db.mongo.base.events.MongoDBRestEvent;
+			import soundshare.station.data.StationContext;
+			import soundshare.station.data.PanelsContext;
+			import soundshare.station.data.account.AccountData;
+			import soundshare.station.data.channels.ChannelContext;
+			import soundshare.station.data.groups.GroupData;
+			import soundshare.sdk.data.platlists.PlaylistContext;
+			
+			import spark.components.Application;
+			import spark.events.IndexChangeEvent;
+			
+			[Bindable] private var tabs:ArrayCollection = new ArrayCollection([
+				{title: "Information", state: "info"},
+				{title: "Channels", state: "channels"},
+				{title: "Playlists", state: "playlists"}, 
+				{title: "Groups", state: "groups"}
+			]);
+			
+			[Bindable] private var channelsCollection:ArrayCollection = new ArrayCollection();
+			[Bindable] private var playlistsCollection:ArrayCollection = new ArrayCollection();
+			[Bindable] private var groupsCollection:ArrayCollection = new ArrayCollection();
+			
+			[Bindable] private var context:StationContext;
+			[Bindable] private var panelsContext:PanelsContext;
+			
+			[Bindable] private var accountData:AccountData = new AccountData();
+			
+			public function init(context:StationContext, panelsContext:PanelsContext):void
+			{
+				this.context = context;
+				this.panelsContext = panelsContext;
+			}
+			
+			public function setData(id:String):void
+			{
+				var accountsDataManager:AccountsDataManager = context.accountsDataManagersBuilder.build();
+				
+				accountsDataManager.addEventListener(MongoDBRestEvent.COMPLETE, onAccountDataComplete);
+				accountsDataManager.addEventListener(MongoDBRestEvent.ERROR, onAccountDataError);
+				accountsDataManager.getAccountData(id);
+			}
+			
+			private function onAccountDataComplete(e:MongoDBRestEvent):void
+			{
+				e.currentTarget.removeEventListener(MongoDBRestEvent.COMPLETE, onAccountDataComplete);
+				e.currentTarget.removeEventListener(MongoDBRestEvent.ERROR, onAccountDataError);
+				
+				var i:int;
+				var channels:Array = e.data.channels as Array;
+				var playlists:Array = e.data.playlists as Array;
+				var groups:Array = e.data.groups as Array;
+				var channelContext:ChannelContext;
+				var playlistContext:PlaylistContext;
+				var groupData:GroupData;
+				
+				trace("AccountDataManager[onAccountDataComplete]:", channels.length, playlists.length, groups.length);
+				
+				accountData.readObject(e.data.account);
+				
+				for (i = 0;i < channels.length;i ++)
+				{
+					channelContext = new ChannelContext();
+					channelContext.readObject(channels[i]);
+					
+					channelsCollection.addItem(channelContext);
+				}
+				
+				for (i = 0;i < playlists.length;i ++)
+				{
+					playlistContext = new PlaylistContext();
+					playlistContext.readObject(playlists[i]);
+					
+					playlistsCollection.addItem(playlistContext);
+				}
+				
+				for (i = 0;i < groups.length;i ++)
+				{
+					groupData = new GroupData();
+					groupData.readObject(groups[i]);
+					
+					groupsCollection.addItem(groupData);
+				}
+				
+				context.accountsDataManagersBuilder.destroy(e.currentTarget as AccountsDataManager);
+			}
+			
+			private function onAccountDataError(e:MongoDBRestEvent):void
+			{
+				e.currentTarget.removeEventListener(MongoDBRestEvent.COMPLETE, onAccountDataComplete);
+				e.currentTarget.removeEventListener(MongoDBRestEvent.ERROR, onAccountDataError);
+				
+				context.accountsDataManagersBuilder.destroy(e.currentTarget as AccountsDataManager);
+				
+				Alert.show("Error result!");
+			}
+			
+			public function show():void
+			{
+				PopUpManager.addPopUp(this, FlexGlobals.topLevelApplication as Application, true);
+				PopUpManager.centerPopUp(this);
+			}
+			
+			protected function close():void
+			{
+				PopUpManager.removePopUp(this);
+				
+				channelsCollection.removeAll();
+				playlistsCollection.removeAll();
+				groupsCollection.removeAll();
+			}
+			
+			private function browseData():void
+			{
+				/* if (accountsCollectionGrid.selectedItem.settings.status != 1)
+					return ;
+				
+				var panel:ChannelPlayerPanel = new ChannelPlayerPanel();
+				panel.init(context, accountsCollectionGrid.selectedItem as ChannelContext);
+				
+				PopUpManager.addPopUp(panel, FlexGlobals.topLevelApplication as Application, true);
+				PopUpManager.centerPopUp(panel); */
+			}
+			
+			protected function onSelectTab(event:IndexChangeEvent):void
+			{
+				currentState = tab.selectedItem.state;
+			}
+			
+		]]>
+	</fx:Script>
+	
+	<s:states>
+		<s:State name="info" />
+		<s:State name="channels" />
+		<s:State name="playlists" />
+		<s:State name="groups" />
+	</s:states>
+	
+	<s:VGroup width="100%" height="100%" paddingBottom="15" paddingLeft="15" paddingRight="15" paddingTop="15">
+		
+		<s:VGroup width="100%" height="100%" gap="-1">
+			<s:TabBar id="tab" dataProvider="{tabs}" labelField="title" change="onSelectTab(event)" />
+			
+			<s:Group width="100%" height="100%">
+				
+				<s:Rect width="100%" height="100%">
+					<s:stroke>
+						<s:SolidColorStroke color="0x333333" />
+					</s:stroke>
+				</s:Rect>
+				
+				<info:AccountDataInfoPanel id="accountDataInfoPanel" includeIn="info" 
+										   creationComplete="accountDataInfoPanel.init(context, accountData);"/>
+				
+				<channels:AccountDataChannelsPanel id="accountDataChannelsPanel" includeIn="channels" 
+												 creationComplete="accountDataChannelsPanel.init(context, panelsContext, channelsCollection, groupsCollection);"/>
+				
+				<playlists:AccountDataPlaylistsPanel id="accountDataPlaylistsPanel" includeIn="playlists" 
+												 creationComplete="accountDataPlaylistsPanel.init(context, panelsContext, playlistsCollection, groupsCollection);"/>
+				
+				<groups:AccountDataGroupsPanel id="accountDataGroupsPanel" includeIn="groups" 
+												 creationComplete="accountDataGroupsPanel.init(context, panelsContext, groupsCollection, channelsCollection, playlistsCollection);"/>
+				
+			</s:Group>
+		</s:VGroup>
+		
+		<s:HGroup>
+			<s:Button label="Close" click="close()" />
+		</s:HGroup>
+		
+	</s:VGroup>
+	
+</s:Panel>

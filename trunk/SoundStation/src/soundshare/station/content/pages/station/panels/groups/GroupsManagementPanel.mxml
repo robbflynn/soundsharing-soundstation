@@ -1,0 +1,442 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx" 
+		 xmlns:paginators="soundshare.station.components.paginators.*"
+		 currentState="members">
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.controls.Alert;
+			import mx.controls.dataGridClasses.DataGridColumn;
+			import mx.events.CollectionEvent;
+			
+			import soundshare.station.components.paginators.events.PaginatorEvent;
+			import soundshare.station.content.pages.station.panels.groups.panels.AddGroupPanel;
+			import soundshare.station.content.pages.station.panels.groups.panels.EditGroupPanel;
+			import soundshare.station.content.pages.station.panels.groups.renderers.TitleRenderer;
+			import soundshare.station.content.pages.station.panels.groups.renderers.channels.ChannelRenderer;
+			import soundshare.station.content.pages.station.panels.groups.renderers.members.MemberRenderer;
+			import soundshare.station.content.pages.station.panels.groups.renderers.members.events.MemberRendererEvent;
+			import soundshare.station.content.pages.station.panels.groups.renderers.playlists.PlaylistRenderer;
+			import soundshare.station.content.pages.station.panels.members.MembersPanel;
+			import soundshare.station.data.StationContext;
+			import soundshare.station.data.PanelsContext;
+			import soundshare.station.data.channels.ChannelContext;
+			import soundshare.station.data.groups.GroupData;
+			import soundshare.station.data.members.MemberData;
+			import soundshare.sdk.data.platlists.PlaylistContext;
+			import soundshare.sdk.db.mongo.base.events.MongoDBRestEvent;
+			import soundshare.sdk.db.mongo.groups.GroupsDataManager;
+			
+			import spark.events.IndexChangeEvent;
+			import spark.events.RendererExistenceEvent;
+			
+			import utils.collection.CollectionUtil;
+			
+			[Bindable] private var context:StationContext;
+			[Bindable] private var panelsContext:PanelsContext;
+			
+			[Bindable] private var tabs:ArrayCollection = new ArrayCollection([
+				{title: "Members", state: "members"}, 
+				{title: "Relations", state: "relations"}
+			]);
+			
+			[Bindable] private var groupsCollection:ArrayCollection = new ArrayCollection();
+			[Bindable] private var membersCollection:ArrayCollection = new ArrayCollection();
+			[Bindable] private var relationsCollection:ArrayCollection = new ArrayCollection();
+			
+			private var addGroupPanel:AddGroupPanel;
+			private var editGroupPanel:EditGroupPanel;
+			
+			private var membersPanel:MembersPanel;
+			
+			public function init(context:StationContext, panelsContext:PanelsContext):void
+			{
+				this.context = context;
+				this.panelsContext = panelsContext;
+				
+				addGroupPanel = new AddGroupPanel();
+				addGroupPanel.init(context);
+				
+				editGroupPanel = new EditGroupPanel();
+				editGroupPanel.init(context);
+				
+				membersPanel = new MembersPanel();
+				membersPanel.init(context);
+				
+				context.groups.addEventListener(CollectionEvent.COLLECTION_CHANGE, onCollectionChange);
+				
+				groupsCollection.source = context.groups.source;
+				groupsCollection.filterFunction = filterFunction;
+				groupsCollection.refresh();
+			}
+			
+			private function onCollectionChange(e:CollectionEvent):void
+			{
+				groupsCollection.refresh();
+			}
+			
+			//**************************************************************************************************************
+			// 												PLAYLISTS VIEW FUNCITON
+			//**************************************************************************************************************
+			
+			protected function addGroup():void
+			{
+				addGroupPanel.show();
+			}
+			
+			protected function editGroup():void
+			{
+				editGroupPanel.show();
+				editGroupPanel.setData(groupsGrid.selectedItem as GroupData);
+			}
+			
+			protected function removeGroup():void
+			{
+				var groupsDataManager:GroupsDataManager = context.groupsDataManagersBuilder.build();
+				
+				groupsDataManager.addEventListener(MongoDBRestEvent.COMPLETE, onRemoveGroupComplete);
+				groupsDataManager.addEventListener(MongoDBRestEvent.ERROR, onRemoveGroupError);
+				groupsDataManager.deleteRecord(context.sessionId, {_id: groupsGrid.selectedItem._id});
+			}
+			
+			private function onRemoveGroupComplete(e:MongoDBRestEvent):void
+			{
+				trace("onRemoveGroupComplete:");
+				
+				e.currentTarget.removeEventListener(MongoDBRestEvent.COMPLETE, onRemoveGroupComplete);
+				e.currentTarget.removeEventListener(MongoDBRestEvent.ERROR, onRemoveGroupError);
+				
+				context.groupsDataManagersBuilder.destroy(e.currentTarget as GroupsDataManager);
+				
+				context.groups.removeItemAt(context.groups.getItemIndex(groupsGrid.selectedItem));
+				context.groups.refresh();
+				
+				Alert.show("Group is deleted!");
+			}
+			
+			private function onRemoveGroupError(e:MongoDBRestEvent):void
+			{
+				e.currentTarget.removeEventListener(MongoDBRestEvent.COMPLETE, onRemoveGroupComplete);
+				e.currentTarget.removeEventListener(MongoDBRestEvent.ERROR, onRemoveGroupError);
+				
+				context.groupsDataManagersBuilder.destroy(e.currentTarget as GroupsDataManager);
+				
+				Alert.show("Error delete!");
+			}
+			
+			//**************************************************************************************************************
+			//**************************************************************************************************************
+			//**************************************************************************************************************
+			
+			private function nameLabelFunc(item:Object, column:DataGridColumn):String 
+			{
+				if (item.type == 1)
+				{
+					var channelContext:ChannelContext = CollectionUtil.getItemFromCollection("_id", item.ownerId, context.channels) as ChannelContext;
+					
+					if (channelContext)
+						return '"' + channelContext.name + '" channel group.';
+				}
+				else
+				if (item.type == 2)
+				{
+					var playlistContext:PlaylistContext = CollectionUtil.getItemFromCollection("_id", item.ownerId, context.playlists) as PlaylistContext;
+					
+					if (playlistContext)
+						return '"' + playlistContext.name + '" playlist group.';
+				}
+				
+				return item.name;
+			}
+			
+			private function typeLabelFunc(item:Object, column:DataGridColumn):String 
+			{
+				return context.groupsTypes[item.type];
+			}
+
+			protected function onSelecteSortType(event:IndexChangeEvent):void
+			{
+				context.applicationSettings.settings.groupsSortType = sortType.selectedItem.value;
+				context.applicationSettings.save();
+				
+				context.groups.refresh();
+			}
+			
+			protected function onSelectGroup():void
+			{
+				var groupData:GroupData = groupsGrid.selectedItem as GroupData;
+				var memberData:MemberData;
+				var i:int;
+				
+				membersCollection.removeAll();
+				relationsCollection.removeAll();
+				
+				var channels:Array = new Array;
+				var playlists:Array = new Array;
+				
+				for (i = 0;i < context.channels.length;i ++)
+					if ((context.channels.getItemAt(i) as ChannelContext).groups.indexOf(groupData._id) != -1)
+						channels.push(context.channels.getItemAt(i));
+				
+				if (channels.length > 0)
+				{
+					relationsCollection.addItem("Channels");
+					relationsCollection.addAll(new ArrayCollection(channels));
+				}
+					
+				for (i = 0;i < context.playlists.length;i ++)
+					if ((context.playlists.getItemAt(i) as PlaylistContext).groups.indexOf(groupData._id) != -1)
+						playlists.push(context.playlists.getItemAt(i));
+				
+				if (playlists.length > 0)
+				{
+					relationsCollection.addItem("Playlists");
+					relationsCollection.addAll(new ArrayCollection(playlists));
+				}
+				
+				var groupsDataManager:GroupsDataManager = context.groupsDataManagersBuilder.build();
+				
+				groupsDataManager.addEventListener(MongoDBRestEvent.COMPLETE, onMembersListComplete);
+				groupsDataManager.addEventListener(MongoDBRestEvent.ERROR, onMembersListError);
+				groupsDataManager.getMembersList(groupData._id, paginator.page, paginator.itemsPerPage);
+			}
+			
+			private function onMembersListComplete(e:MongoDBRestEvent):void
+			{
+				trace("onMembersListComplete:", e.data.collection);
+				
+				e.currentTarget.removeEventListener(MongoDBRestEvent.COMPLETE, onMembersListComplete);
+				e.currentTarget.removeEventListener(MongoDBRestEvent.ERROR, onMembersListError);
+				
+				context.groupsDataManagersBuilder.destroy(e.currentTarget as GroupsDataManager);
+				
+				var collection:Array = e.data.collection as Array;
+				var memberData:MemberData;
+				
+				for (var i:int = 0;i < collection.length;i ++)
+				{
+					memberData = new MemberData();
+					memberData.readObject(collection[i].member);
+					
+					membersCollection.addItem(memberData);
+				}
+				
+				paginator.update(e.data.page, e.data.pages);
+			}
+			
+			private function onMembersListError(e:MongoDBRestEvent):void
+			{
+				e.currentTarget.removeEventListener(MongoDBRestEvent.COMPLETE, onMembersListComplete);
+				e.currentTarget.removeEventListener(MongoDBRestEvent.ERROR, onMembersListError);
+				
+				context.groupsDataManagersBuilder.destroy(e.currentTarget as GroupsDataManager);
+				
+				Alert.show("Error list!");
+			}
+			
+			private function filterFunction(item:Object):Boolean
+			{
+				if (sortType.selectedItem)
+					switch (sortType.selectedItem.value)
+					{
+						case 1:
+							return item.type == 0;
+							break;
+						case 2:
+							return item.type == 1;
+							break;
+						case 3:
+							return item.type == 2;
+							break;
+						case 4:
+							return item.type == 1 || item.type == 2;
+							break;
+					}
+				
+				return true;
+			}
+			
+			protected function onSelectPage(e:PaginatorEvent):void
+			{
+				onSelectGroup();
+			}
+			
+			protected function onChangeItemsPerPage(e:PaginatorEvent):void
+			{
+				context.applicationSettings.settings.groupMembersPerPage = e.items_per_page;
+				context.applicationSettings.save();
+			}
+			
+			protected function onViewAllMembers():void
+			{
+				membersPanel.show();
+			}
+			
+			protected function onSelectTab(event:IndexChangeEvent):void
+			{
+				currentState = tab.selectedItem.state;
+			}
+			
+			private function itemRendererFunction(item:Object):IFactory
+			{
+				if (item is PlaylistContext)
+					return new ClassFactory(PlaylistRenderer);
+				else
+				if (item is ChannelContext)
+					return new ClassFactory(ChannelRenderer);
+				
+				return new ClassFactory(TitleRenderer);
+			}
+			
+			protected function addRelationRender(e:RendererExistenceEvent):void
+			{
+				/* if (e.renderer is ChannelRenderer)
+				{
+					(e.renderer as ChannelRenderer).addEventListener(ChannelRendererEvent.EDIT, onEditChannel);
+					(e.renderer as ChannelRenderer).addEventListener(ChannelRendererEvent.BROADCAST, onBroadcastChannel);
+					(e.renderer as ChannelRenderer).addEventListener(ChannelRendererEvent.INVATE, onInviteChannel);
+					(e.renderer as ChannelRenderer).addEventListener(ChannelRendererEvent.DELETE, onDeleteChannel);
+				}
+				else
+				if (e.renderer is PlaylistChannelRenderer)
+				{
+					(e.renderer as PlaylistChannelRenderer).addEventListener(PlaylistChannelRendererEvent.CLOSE, onCloseChannel);
+				} */
+			}
+			
+			protected function removeRelationRender(e:RendererExistenceEvent):void
+			{
+				/* if (e.renderer is ChannelRenderer)
+				{
+					(e.renderer as ChannelRenderer).removeEventListener(ChannelRendererEvent.EDIT, onEditChannel);
+					(e.renderer as ChannelRenderer).removeEventListener(ChannelRendererEvent.BROADCAST, onBroadcastChannel);
+					(e.renderer as ChannelRenderer).removeEventListener(ChannelRendererEvent.INVATE, onInviteChannel);
+					(e.renderer as ChannelRenderer).removeEventListener(ChannelRendererEvent.DELETE, onDeleteChannel);
+				}
+				else
+				if (e.renderer is PlaylistChannelRenderer)
+				{
+					(e.renderer as PlaylistChannelRenderer).removeEventListener(PlaylistChannelRendererEvent.CLOSE, onCloseChannel);
+				} */
+			}
+			
+			protected function addMemberRender(e:RendererExistenceEvent):void
+			{
+				(e.renderer as MemberRenderer).addEventListener(MemberRendererEvent.VIEW, onViewMember);
+			}
+			
+			protected function removeMemberRender(e:RendererExistenceEvent):void
+			{
+				(e.renderer as MemberRenderer).removeEventListener(MemberRendererEvent.VIEW, onViewMember);
+			}
+			
+			protected function onViewMember(e:MemberRendererEvent):void
+			{
+				panelsContext.accountDataPanel.show();
+				panelsContext.accountDataPanel.setData(e.memberData.memberId);
+			}
+			
+		]]>
+	</fx:Script>
+	
+	<s:states>
+		<s:State name="members" />
+		<s:State name="relations" />
+	</s:states>
+	
+	<s:HGroup width="100%" height="100%" paddingBottom="10" paddingLeft="10" paddingRight="10" paddingTop="10">
+		
+		<s:VGroup height="100%" width="100%">
+			
+			<s:Group width="100%">
+				<s:HGroup>
+					<s:Button label="Add group" click="addGroup()" />
+					<s:Button label="Edit group" click="editGroup()" enabled="{groupsGrid.selectedItem}" />
+					<s:Button label="Delete group" click="removeGroup()" enabled="{groupsGrid.selectedItem &amp;&amp; groupsGrid.selectedItem.deletable}" />
+					<s:Button label="View all members" click="onViewAllMembers()" />
+				</s:HGroup>
+				
+				<s:HGroup right="0" verticalAlign="middle">
+					<s:Label text="Show:" paddingTop="2"/>
+					<s:ComboBox id="sortType" width="250" dataProvider="{context.groupsSortTypes}" labelField="title"
+								change="onSelecteSortType(event)" 
+								selectedIndex="{context.applicationSettings.settings.groupsSortType}"/>
+				</s:HGroup>
+				
+			</s:Group>
+			
+			
+			<s:HGroup width="100%" height="100%">
+				
+				<mx:DataGrid id="groupsGrid" dataProvider="{groupsCollection}" width="50%" height="100%"
+							 doubleClickEnabled="true"
+							 change="onSelectGroup()"
+							 doubleClick="editGroup()">
+					<mx:columns>
+						<mx:DataGridColumn labelFunction="nameLabelFunc" headerText="Name"  />
+						<mx:DataGridColumn labelFunction="typeLabelFunc" headerText="Type" width="100"  />
+					</mx:columns>
+				</mx:DataGrid>
+				
+				<s:VGroup width="50%" height="100%" gap="0">
+					
+					<s:TabBar id="tab" dataProvider="{tabs}" labelField="title" change="onSelectTab(event)" />
+					<s:Group width="100%" height="100%">
+						
+						<s:Rect width="100%" height="100%">
+							<s:stroke>
+								<s:SolidColorStroke color="0x333333" />
+							</s:stroke>
+						</s:Rect>
+						
+						<s:VGroup width="100%" height="100%" includeIn="members" paddingTop="5" paddingLeft="5" paddingRight="5" paddingBottom="5">
+							
+							<s:Scroller width="100%" height="100%">
+								<s:Group>
+									<s:List id="membersGrid" width="100%" dataProvider="{membersCollection}" 
+											itemRenderer="soundshare.station.content.pages.station.panels.groups.renderers.members.MemberRenderer"
+											rendererAdd="addMemberRender(event)"
+											rendererRemove="removeMemberRender(event)"
+											borderVisible="false">
+										<s:layout>
+											<s:VerticalLayout gap="5" />
+										</s:layout>
+									</s:List>
+								</s:Group>
+							</s:Scroller>
+							
+							<paginators:Paginator id="paginator" itemsPerPage="{context.applicationSettings.settings.groupMembersPerPage}" 
+												  goto="onSelectPage(event)"
+												  change="onChangeItemsPerPage(event)"/>
+						</s:VGroup>
+						
+						<s:VGroup width="100%" height="100%" includeIn="relations" paddingTop="5" paddingLeft="5" paddingRight="5" paddingBottom="5">
+							<s:Scroller width="100%" height="100%">
+								<s:Group>
+									<s:List id="relationsList" width="100%" dataProvider="{relationsCollection}" 
+											itemRendererFunction="{itemRendererFunction}"
+											rendererAdd="addRelationRender(event)"
+											rendererRemove="removeRelationRender(event)"
+											borderVisible="false">
+										<s:layout>
+											<s:VerticalLayout variableRowHeight="true" gap="5" />
+										</s:layout>
+									</s:List>
+								</s:Group>
+							</s:Scroller>
+						</s:VGroup>
+						
+					</s:Group>
+					
+				</s:VGroup>
+				
+			</s:HGroup>
+			
+		</s:VGroup>
+		
+	</s:HGroup>
+	
+</s:Group>

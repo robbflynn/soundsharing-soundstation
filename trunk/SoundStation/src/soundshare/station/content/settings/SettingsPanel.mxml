@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Panel xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx"
+		 title="Settings">
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.core.FlexGlobals;
+			import mx.managers.PopUpManager;
+			
+			import soundshare.station.data.StationContext;
+			
+			import spark.components.Application;
+			
+			[Bindable] private var context:StationContext;
+			
+			public function init(context:StationContext):void
+			{
+				this.context = context;
+			}
+			
+			public function show():void
+			{
+				PopUpManager.addPopUp(this, FlexGlobals.topLevelApplication as Application, true);
+				PopUpManager.centerPopUp(this);
+				
+				urlTxt.text = context.applicationSettings.settings.MANAGER_URL;
+			}
+			
+			protected function close():void
+			{
+				PopUpManager.removePopUp(this);
+			}
+			
+			protected function save():void
+			{
+				context.applicationSettings.settings.MANAGER_URL = urlTxt.text;
+				context.applicationSettings.save();
+				
+				close();
+				dispatchEvent(new Event(Event.COMPLETE));
+			}
+			
+		]]>
+	</fx:Script>
+	
+	<s:VGroup paddingBottom="15" paddingLeft="15" paddingTop="20" paddingRight="15">
+		
+		<s:Label text="Manager URL:" />
+		<s:TextInput id="urlTxt" width="550" />
+		
+		<s:HGroup paddingTop="15">
+			<s:Button label="Save" click="save()" />
+			<s:Button label="Cancel" click="close()" />
+		</s:HGroup>
+		
+	</s:VGroup>
+	
+</s:Panel>

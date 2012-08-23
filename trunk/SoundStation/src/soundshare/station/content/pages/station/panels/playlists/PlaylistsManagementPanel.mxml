@@ -1,0 +1,234 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx">
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.controls.Alert;
+			import mx.events.CollectionEvent;
+			import mx.events.ListEvent;
+			
+			import soundshare.station.content.pages.station.panels.playlists.panels.AddPlaylistPanel;
+			import soundshare.station.content.pages.station.panels.playlists.panels.EditPlaylistPanel;
+			import soundshare.station.content.pages.station.panels.playlists.panels.EditPlaylistSongsPanel;
+			import soundshare.station.data.StationContext;
+			import soundshare.station.data.PanelsContext;
+			import soundshare.sdk.data.platlists.PlaylistContext;
+			import soundshare.sdk.data.plugin.PluginData;
+			import soundshare.sdk.db.mongo.base.events.MongoDBRestEvent;
+			import soundshare.sdk.db.mongo.playlists.PlaylistsDataManager;
+			
+			[Bindable] private var context:StationContext;
+			[Bindable] private var playlistCollection:ArrayCollection = new ArrayCollection();
+			
+			private var addPlaylistPanel:AddPlaylistPanel;
+			private var editPlaylistPanel:EditPlaylistPanel;
+			private var editPlaylistSongsPanel:EditPlaylistSongsPanel;
+			
+			public function init(context:StationContext, panelsContext:PanelsContext):void
+			{
+				this.context = context;
+				
+				addPlaylistPanel = new AddPlaylistPanel();
+				addPlaylistPanel.init(context, panelsContext);
+				
+				editPlaylistPanel = new EditPlaylistPanel();
+				editPlaylistPanel.init(context, panelsContext);
+				
+				editPlaylistSongsPanel = new EditPlaylistSongsPanel();
+				editPlaylistSongsPanel.init(context);
+				
+				context.playlists.addEventListener(CollectionEvent.COLLECTION_CHANGE, onCollectionChange);
+				
+				playlistCollection.source = context.playlists.source;
+				playlistCollection.filterFunction = filterFunction;
+				playlistCollection.refresh();
+			}
+			
+			private function onCollectionChange(e:CollectionEvent):void
+			{
+				playlistCollection.refresh();
+			}
+			
+			//**************************************************************************************************************
+			// 												PLAYLISTS VIEW FUNCITON
+			//**************************************************************************************************************
+			
+			private function getPlaylists():void
+			{
+				context.playlists.removeAll();
+				
+				var playlistsDataManager:PlaylistsDataManager = context.playlistsDataManagersBuilder.build();
+				
+				playlistsDataManager.addEventListener(MongoDBRestEvent.COMPLETE, onPlaylistsListComplete);
+				playlistsDataManager.addEventListener(MongoDBRestEvent.ERROR, onPlaylistsListError);
+				playlistsDataManager.getRecordsList({accountId: context.accountData._id});
+			}
+			
+			private function onPlaylistsListComplete(e:MongoDBRestEvent):void
+			{
+				//trace("onPlaylistsListComplete:", e.collection.length);
+				
+				e.currentTarget.removeEventListener(MongoDBRestEvent.COMPLETE, onPlaylistsListComplete);
+				e.currentTarget.removeEventListener(MongoDBRestEvent.ERROR, onPlaylistsListError);
+				
+				context.playlistsDataManagersBuilder.destroy(e.currentTarget as PlaylistsDataManager);
+				
+				var collection:Array = e.data as Array;
+				
+				for (var i:int = 0;i < collection.length;i ++)
+				{
+					var playlistContext:PlaylistContext = new PlaylistContext();
+					playlistContext.readObject(collection[i]);
+					
+					context.playlists.addItem(playlistContext);
+				}
+			}
+			
+			private function onPlaylistsListError(e:MongoDBRestEvent):void
+			{
+				e.currentTarget.removeEventListener(MongoDBRestEvent.COMPLETE, onPlaylistsListComplete);
+				e.currentTarget.removeEventListener(MongoDBRestEvent.ERROR, onPlaylistsListError);
+				
+				context.playlistsDataManagersBuilder.destroy(e.currentTarget as PlaylistsDataManager);
+				
+				Alert.show("Error list!");
+			}
+			
+			protected function addPlaylist():void
+			{
+				addPlaylistPanel.show();
+				addPlaylistPanel.setData(stationsCb.selectedItem._id);
+			}
+			
+			protected function editPlaylist():void
+			{
+				editPlaylistPanel.show();
+				editPlaylistPanel.setData(playlistsGrid.selectedItem as PlaylistContext);
+			}
+			
+			protected function removePlaylist():void
+			{
+				var playlistsDataManager:PlaylistsDataManager = context.playlistsDataManagersBuilder.build();
+				
+				playlistsDataManager.addEventListener(MongoDBRestEvent.COMPLETE, onRemovePlaylistComplete);
+				playlistsDataManager.addEventListener(MongoDBRestEvent.ERROR, onRemovePlaylistError);
+				playlistsDataManager.deleteRecord(context.sessionId, {_id: playlistsGrid.selectedItem._id});
+			}
+			
+			private function onRemovePlaylistComplete(e:MongoDBRestEvent):void
+			{
+				trace("onRemovePlaylistComplete:");
+				
+				e.currentTarget.removeEventListener(MongoDBRestEvent.COMPLETE, onRemovePlaylistComplete);
+				e.currentTarget.removeEventListener(MongoDBRestEvent.ERROR, onRemovePlaylistError);
+				
+				context.playlistsDataManagersBuilder.destroy(e.currentTarget as PlaylistsDataManager);
+				
+				context.playlists.removeItemAt(context.playlists.getItemIndex(playlistsGrid.selectedItem));
+				context.playlists.refresh();
+				
+				Alert.show("Playlist is deleted!");
+			}
+			
+			private function onRemovePlaylistError(e:MongoDBRestEvent):void
+			{
+				e.currentTarget.removeEventListener(MongoDBRestEvent.COMPLETE, onRemovePlaylistComplete);
+				e.currentTarget.removeEventListener(MongoDBRestEvent.ERROR, onRemovePlaylistError);
+				
+				context.playlistsDataManagersBuilder.destroy(e.currentTarget as PlaylistsDataManager);
+				
+				Alert.show("Error delete!");
+			}
+			
+			protected function editSongs():void
+			{
+				context.pluginsBuilder.buildListener("-REMOTE_PLAYLIST-");
+			}
+			
+			protected function editPermissions():void
+			{
+				
+			}
+			
+			//**************************************************************************************************************
+			//**************************************************************************************************************
+			//**************************************************************************************************************
+			
+			private function typeLabelFunc(item:Object, column:DataGridColumn):String 
+			{
+				return context.playlistTypes[item.type];
+			}
+			
+			private function totalLabelFunc(item:Object, column:DataGridColumn):String 
+			{
+				return item.total;
+			}
+			
+			private function genreLabelFunc(item:Object, column:DataGridColumn):String 
+			{
+				return String(item.genre).split(",").join(", ");
+			}
+			
+			private function filterFunction(item:Object):Boolean
+			{
+				if (!stationsCb.selectedItem)
+					return false;
+				
+				return item.stationId == context.applicationSettings.settings.playlistsStationId;
+			}
+			
+			protected function refreshPlaylists():void
+			{
+				context.applicationSettings.settings.playlistsStationId = stationsCb.selectedItem._id;
+				context.applicationSettings.settings.playlistsStationIndex = stationsCb.selectedIndex;
+				context.applicationSettings.save();
+				
+				context.playlists.refresh();
+			}
+
+			protected function onSelectPlaylist():void
+			{
+				if (playlistsGrid.selectedItem)
+					context.selectedPlaylist = playlistsGrid.selectedItem as PlaylistContext;
+			}
+			
+		]]>
+	</fx:Script>
+	
+	<s:HGroup width="100%" height="100%" paddingBottom="10" paddingLeft="10" paddingRight="10" paddingTop="10">
+		
+		<s:VGroup height="100%" width="100%">
+			
+			<s:HGroup verticalAlign="middle">
+				<s:Button label="Add playlist" click="addPlaylist()" />
+				<s:Button label="Edit playlist" click="editPlaylist()" enabled="{playlistsGrid.selectedItem}" />
+				<s:Button label="Delete playlist" click="removePlaylist()" enabled="{playlistsGrid.selectedItem}" />
+				<s:Button label="Edit songs" click="editSongs()" enabled="{playlistsGrid.selectedItem}" />
+				<s:Button label="Permissions" click="editPermissions()" enabled="{playlistsGrid.selectedItem}" />
+				
+				<s:Label text="Station:" paddingLeft="20" paddingTop="2" />
+				<s:ComboBox id="stationsCb" labelField="name" dataProvider="{context.stations}" 
+							selectedIndex="{context.applicationSettings.settings.playlistsStationIndex}"  
+							change="refreshPlaylists()"/>
+			</s:HGroup>
+			
+			<mx:DataGrid id="playlistsGrid" dataProvider="{playlistCollection}" width="100%" height="100%"
+						 doubleClickEnabled="true"
+						 doubleClick="editSongs()"
+						 change="onSelectPlaylist()">
+				<mx:columns>
+					<mx:DataGridColumn dataField="name" headerText="Name"  />
+					<mx:DataGridColumn labelFunction="genreLabelFunc" headerText="Genre"  />
+					<mx:DataGridColumn labelFunction="typeLabelFunc" headerText="Type" textAlign="center" width="80"/>
+					<mx:DataGridColumn labelFunction="totalLabelFunc" headerText="Total songs" textAlign="right" paddingRight="7" width="120"/>
+				</mx:columns>
+			</mx:DataGrid>
+			
+		</s:VGroup>
+		
+	</s:HGroup>
+	
+</s:Group>

@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Panel xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx">
+	
+	<fx:Script>
+		<![CDATA[
+			import data.ApplicationContext;
+			
+			import managers.accounts.messenger.events.AccountMessengerManagerEvent;
+			
+			import mx.collections.ArrayCollection;
+			import mx.managers.PopUpManager;
+			
+			[Bindable] private var context:ApplicationContext;
+			[Bindable] private var messages:ArrayCollection = new ArrayCollection();;
+			
+			public function init(context:ApplicationContext):void
+			{
+				this.context = context;
+				this.context.accountMessengerManager.addSocketEventListener(AccountMessengerManagerEvent.NEW_MESSAGE, onNewMessage);
+			}
+			
+			private function onNewMessage(e:AccountMessengerManagerEvent):void
+			{
+				messages.addItem(e.data);
+				
+				trace("onNewMessage:", e.data.message);
+			}
+			
+			private function close():void
+			{
+				PopUpManager.removePopUp(this);
+			}
+			
+		]]>
+	</fx:Script>
+	
+	<s:VGroup paddingBottom="15" paddingLeft="15" paddingRight="15" paddingTop="15">
+		
+		<mx:DataGrid id="playlistsGrid" dataProvider="{context.playlists}" width="550" height="400"
+					 variableRowHeight="true">
+			<mx:columns>
+				<mx:DataGridColumn dataField="message" headerText="Name"  />
+			</mx:columns>
+		</mx:DataGrid>
+		
+		<s:HGroup>
+			<s:Button label="Close" click="close()" />
+		</s:HGroup>
+		
+	</s:VGroup>
+	
+</s:Panel>

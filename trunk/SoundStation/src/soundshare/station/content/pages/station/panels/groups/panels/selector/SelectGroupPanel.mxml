@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Panel xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx"
+		 title="Select group"
+		 width="700" height="400">
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.core.FlexGlobals;
+			import mx.managers.PopUpManager;
+			
+			import soundshare.station.data.StationContext;
+			import soundshare.station.data.channels.ChannelContext;
+			import soundshare.station.data.groups.GroupData;
+			
+			import spark.components.Application;
+			
+			import utils.collection.CollectionUtil;
+			
+			[Bindable] private var context:StationContext;
+			
+			private var selectedGroups:ArrayCollection;
+			
+			public function init(context:StationContext):void
+			{
+				this.context = context;
+			}
+			
+			public function show():void
+			{
+				PopUpManager.addPopUp(this, FlexGlobals.topLevelApplication as Application, true);
+				PopUpManager.centerPopUp(this);
+			}
+			
+			public function setData(selectedGroups:ArrayCollection):void
+			{
+				this.selectedGroups = selectedGroups;
+				
+				context.groups.filterFunction = filterFunction;
+				context.groups.refresh();
+			}
+			
+			private function filterFunction(item:Object):Boolean
+			{
+				return item.type == 0 && !(CollectionUtil.getItemFromCollection("_id", item._id, selectedGroups) as GroupData);
+			}
+			
+			protected function close():void
+			{
+				hide();
+				dispatchEvent(new Event(Event.CANCEL));
+			}
+			
+			protected function hide():void
+			{
+				PopUpManager.removePopUp(this);
+				
+				context.groups.filterFunction = null;
+				context.groups.refresh();
+			}
+
+			protected function select():void
+			{
+				hide();
+				dispatchEvent(new Event(Event.SELECT));
+			}
+			
+			public function get groupData():GroupData
+			{
+				return groupsGrid.selectedItem as GroupData;
+			}
+			
+		]]>
+	</fx:Script>
+	
+	<s:VGroup width="100%" height="100%" paddingBottom="15" paddingLeft="15" paddingTop="20" paddingRight="15">
+		<mx:DataGrid id="groupsGrid" dataProvider="{context.groups}" width="100%" height="100%"
+					 doubleClickEnabled="true"
+					 doubleClick="select()">
+			<mx:columns>
+				<mx:DataGridColumn dataField="name" headerText="Name"  />
+			</mx:columns>
+		</mx:DataGrid>
+		
+		<s:HGroup>
+			<s:Button label="Select" click="select()" enabled="{context.groups.length != 0}"/>
+			<s:Button label="Cancel" click="close()" />
+		</s:HGroup>
+		
+	</s:VGroup>
+	
+</s:Panel>

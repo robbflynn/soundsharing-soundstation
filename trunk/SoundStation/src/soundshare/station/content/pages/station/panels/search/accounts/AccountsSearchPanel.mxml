@@ -1,0 +1,141 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx" 
+		 xmlns:paginators="soundshare.station.components.paginators.*"
+		 currentState="result">
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.controls.Alert;
+			import mx.managers.CursorManager;
+			
+			import soundshare.sdk.db.mongo.accounts.AccountsDataManager;
+			import soundshare.sdk.db.mongo.base.events.MongoDBRestEvent;
+			import soundshare.station.data.StationContext;
+			import soundshare.station.data.PanelsContext;
+			import soundshare.station.data.account.AccountData;
+			
+			[Bindable] private var context:StationContext;
+			[Bindable] private var panelsContext:PanelsContext;
+			
+			[Bindable] private var accountsCollection:ArrayCollection = new ArrayCollection();
+			
+			private var tmpAccountsDataManager:AccountsDataManager
+			
+			public function init(context:StationContext, panelsContext:PanelsContext):void
+			{
+				this.context = context;
+				this.panelsContext = panelsContext;
+			}
+			
+			protected function startSearching():void
+			{
+				currentState = "searching";
+				accountsCollection.removeAll();
+				
+				tmpAccountsDataManager = context.accountsDataManagersBuilder.build();
+				tmpAccountsDataManager.addEventListener(MongoDBRestEvent.COMPLETE, onChannelsListComplete);
+				tmpAccountsDataManager.addEventListener(MongoDBRestEvent.ERROR, onChannelsListError);
+				tmpAccountsDataManager.getRecordsList();
+			}
+			
+			protected function stopSearching():void
+			{
+				tmpAccountsDataManager.removeEventListener(MongoDBRestEvent.COMPLETE, onChannelsListComplete);
+				tmpAccountsDataManager.removeEventListener(MongoDBRestEvent.ERROR, onChannelsListError);
+				
+				tmpAccountsDataManager.close();
+				tmpAccountsDataManager = null;
+				
+				currentState = "result";
+			}
+			
+			private function onChannelsListComplete(e:MongoDBRestEvent):void
+			{
+				e.currentTarget.removeEventListener(MongoDBRestEvent.COMPLETE, onChannelsListComplete);
+				e.currentTarget.removeEventListener(MongoDBRestEvent.ERROR, onChannelsListError);
+				
+				var collection:Array = e.data as Array;
+				
+				trace("onChannelsListComplete:", collection.length);
+				
+				var accountData:AccountData;
+				
+				for (var i:int = 0;i < collection.length;i ++)
+				{
+					accountData = new AccountData();
+					accountData.readObject(collection[i])
+					
+					accountsCollection.addItem(accountData);
+				}
+				
+				context.accountsDataManagersBuilder.destroy(e.currentTarget as AccountsDataManager);
+				
+				currentState = "result";
+				tmpAccountsDataManager = null;
+			}
+			
+			private function onChannelsListError(e:MongoDBRestEvent):void
+			{
+				e.currentTarget.removeEventListener(MongoDBRestEvent.COMPLETE, onChannelsListComplete);
+				e.currentTarget.removeEventListener(MongoDBRestEvent.ERROR, onChannelsListError);
+				
+				context.accountsDataManagersBuilder.destroy(e.currentTarget as AccountsDataManager);
+				
+				currentState = "result";
+				tmpAccountsDataManager = null;
+				
+				Alert.show("Error result!");
+			}
+			
+			private function browseData():void
+			{
+				panelsContext.accountDataPanel.show();
+				panelsContext.accountDataPanel.setData((accountsGrid.selectedItem as AccountData)._id);
+			}
+			
+		]]>
+	</fx:Script>
+	
+	<s:states>
+		<s:State name="searching" />
+		<s:State name="result" />
+	</s:states>
+	
+	<s:VGroup width="100%" height="100%" paddingBottom="10" paddingLeft="10" paddingRight="10" paddingTop="10">
+		
+		<s:HGroup>
+			<s:TextInput id="searchTxt" width="350" />
+			<s:Button label="Search" click="startSearching()" includeIn="result" />
+			<s:Button label="Stop" click="stopSearching()" includeIn="searching" />
+			<s:Button label="Browse user data" click="browseData()" enabled="{accountsGrid.selectedItem}" />
+		</s:HGroup>
+		
+		<s:Group width="100%" height="100%">
+			<s:VGroup width="100%" height="100%">
+				<mx:DataGrid id="accountsGrid" dataProvider="{accountsCollection}" width="100%" height="100%"
+							 doubleClickEnabled="true"
+							 doubleClick="browseData()">
+					<mx:columns>
+						<mx:DataGridColumn dataField="username" headerText="Username" />
+					</mx:columns>
+				</mx:DataGrid>
+				
+				<paginators:Paginator />
+			</s:VGroup>
+			
+			<s:Group width="100%" height="100%" includeIn="searching">
+				<s:Rect width="100%" height="100%">
+					<s:fill>
+						<s:SolidColor color="0xFFFFFF" alpha="0.5" />
+					</s:fill>
+				</s:Rect>
+			</s:Group>
+			
+		</s:Group>
+		
+	</s:VGroup>
+	
+</s:Group>

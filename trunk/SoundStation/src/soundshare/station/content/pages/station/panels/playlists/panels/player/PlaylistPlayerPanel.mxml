@@ -1,0 +1,530 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Panel xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx"
+		 title="Edit playlist songs"
+		 currentState="info" 
+		 width="850"
+		 initialize="currentState='init';"
+		 xmlns:indicators="soundshare.station.components.indicators.*">
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.controls.Alert;
+			import mx.core.FlexGlobals;
+			import mx.managers.CursorManager;
+			import mx.managers.PopUpManager;
+			
+			import soundshare.station.data.StationContext;
+			import soundshare.station.data.PanelsContext;
+			import soundshare.station.data.groups.GroupData;
+			import soundshare.sdk.data.platlists.PlaylistContext;
+			import soundshare.station.listeners.remote.rpb.RemotePlaylistListener;
+			import soundshare.station.listeners.remote.rpb.events.RemotePlaylistListenerEvent;
+			import soundshare.station.utils.debuger.Debuger;
+			import soundshare.sdk.db.mongo.base.events.MongoDBRestEvent;
+			import soundshare.sdk.db.mongo.groups.GroupsDataManager;
+			import soundshare.sdk.managers.stations.events.StationsManagerEvent;
+			
+			import spark.components.Application;
+			import spark.events.IndexChangeEvent;
+			
+			[Bindable] private var tabs:ArrayCollection = new ArrayCollection([
+				{title: "Player", state: "player"}, 
+				{title: "Information", state: "info"}
+			]);
+			
+			[Bindable] public var context:StationContext;
+			[Bindable] public var panelsContext:PanelsContext;
+			
+			[Bindable] private var playlistCollection:ArrayCollection = new ArrayCollection();
+			[Bindable] private var groupsCollection:ArrayCollection = new ArrayCollection();
+			
+			[Bindable] private var playlistContext:PlaylistContext;
+			
+			//private var stationsManager:StationsManager;
+			
+			[Bindable] private var remotePlaylistListener:RemotePlaylistListener;
+			[Bindable] private var channelType:String;
+			
+			public function init(context:StationContext, panelsContext:PanelsContext):void
+			{
+				this.context = context;
+				this.panelsContext = panelsContext;
+				
+				this.groupsCollection.filterFunction = filterFunction;
+			}
+			
+			public function setData(playlistContext:PlaylistContext, groupsCollection:ArrayCollection = null, showPlayer:Boolean = true):void
+			{
+				this.playlistCollection.removeAll();
+				this.playlistContext = playlistContext;
+				
+				channelType = context.playlistTypes[playlistContext.type];
+				
+				trace("setData:", groupsCollection);
+				
+				if (groupsCollection)
+				{
+					this.groupsCollection.source = [].concat(groupsCollection.source);
+					this.groupsCollection.refresh();
+					
+					if (showPlayer)
+						currentState = 'player';
+					else
+						currentState = 'info';
+					
+					enabled = false;
+					CursorManager.setBusyCursor();
+					
+					callLater(prepare);
+				}
+				else
+				{
+					this.groupsCollection.removeAll();
+					
+					if (playlistContext.groups && playlistContext.groups.length > 0)
+					{
+						enabled = false;
+						CursorManager.setBusyCursor();
+						
+						var groupsDataManager:GroupsDataManager = context.groupsDataManagersBuilder.build();
+						groupsDataManager.addEventListener(MongoDBRestEvent.COMPLETE, onGroupsComplete);
+						groupsDataManager.addEventListener(MongoDBRestEvent.ERROR, onGroupsError);
+						groupsDataManager.getRecordsList({_id: {$in: playlistContext.groups}});
+					}
+					else
+					if (showPlayer)
+					{
+						currentState = 'player';
+						prepare();
+					}
+					else
+					{
+						currentState = 'info';
+						prepare();
+					}
+				}
+			}
+			
+			private function onGroupsComplete(e:MongoDBRestEvent):void
+			{
+				e.currentTarget.removeEventListener(MongoDBRestEvent.COMPLETE, onGroupsComplete);
+				e.currentTarget.removeEventListener(MongoDBRestEvent.ERROR, onGroupsError);
+				
+				context.groupsDataManagersBuilder.destroy(e.currentTarget as GroupsDataManager);
+				
+				var groups:Array = e.data as Array;
+				var groupData:GroupData;
+				
+				for (var i:int = 0;i < groups.length;i ++)
+				{
+					groupData = new GroupData();
+					groupData.readObject(groups[i]);
+					
+					groupsCollection.addItem(groupData);
+				}
+				
+				enabled = true;
+				CursorManager.removeBusyCursor();
+				
+				currentState = 'player';
+				prepare();
+				
+				trace("onGroupsComplete:", groupsCollection.length);
+			}
+			
+			private function onGroupsError(e:MongoDBRestEvent):void
+			{
+				e.currentTarget.removeEventListener(MongoDBRestEvent.COMPLETE, onGroupsComplete);
+				e.currentTarget.removeEventListener(MongoDBRestEvent.ERROR, onGroupsError);
+				
+				context.groupsDataManagersBuilder.destroy(e.currentTarget as GroupsDataManager);
+				
+				enabled = true;
+				CursorManager.removeBusyCursor();
+				
+				Alert.show("Unable to load playlist groups!");
+			}
+			
+			private function filterFunction(item:Object):Boolean
+			{
+				return playlistContext.groups.indexOf(item._id) != -1;
+			}
+			
+			private function getGroupById(id:String):GroupData
+			{
+				for (var i:int = 0;i < context.groups.length;i ++)
+					if ((context.groups.getItemAt(i) as GroupData)._id == id)
+						return context.groups.getItemAt(i) as GroupData;
+				
+				return null;
+			}
+			
+			//**************************************************************************************************************
+			// 												SONGS VIEW FUNCITON
+			//**************************************************************************************************************
+			
+			private function prepare():void
+			{
+				trace("-prepareForRemotePlaylistBroadcast-");
+				
+				enabled = false;
+				CursorManager.setBusyCursor();
+				
+				onlineIndicator.currentState = OnlineIndicator.CONNECTING;
+				
+				remotePlaylistListener.addEventListener(RemotePlaylistListenerEvent.PREPARE_COMPLETE, onPrepareComplete);
+				remotePlaylistListener.addEventListener(RemotePlaylistListenerEvent.PREPARE_ERROR, onPrepareError);
+				remotePlaylistListener.prepare(playlistContext);
+			}
+			
+			private function onPrepareComplete(e:RemotePlaylistListenerEvent):void
+			{
+				trace("-RemotePlaylistListenerPanel[onPrepareComplete]-");
+				
+				remotePlaylistListener.removeEventListener(RemotePlaylistListenerEvent.PREPARE_COMPLETE, onPrepareComplete);
+				remotePlaylistListener.removeEventListener(RemotePlaylistListenerEvent.PREPARE_ERROR, onPrepareError);
+				
+				playlistCollection.source = remotePlaylistListener.playlist;
+				
+				enabled = true;
+				CursorManager.removeBusyCursor();
+			}
+			
+			private function onPrepareError(e:RemotePlaylistListenerEvent):void
+			{
+				trace("-RemotePlaylistListenerPanel[onPrepareError]-");
+				
+				remotePlaylistListener.removeEventListener(RemotePlaylistListenerEvent.PREPARE_COMPLETE, onPrepareComplete);
+				remotePlaylistListener.removeEventListener(RemotePlaylistListenerEvent.PREPARE_ERROR, onPrepareError);
+				
+				context.remotePlaylistListenerBuilder.destroy(remotePlaylistListener);
+				remotePlaylistListener = null;
+				
+				enabled = true;
+				CursorManager.removeBusyCursor();
+			}
+			
+			private function onStationUpDetected(e:StationsManagerEvent):void
+			{
+				trace("-RemotePlaylistListenerPanel[onLoginDetected]-");
+				
+				onlineIndicator.currentState = OnlineIndicator.ONLINE;
+			}
+			
+			private function onStationDownDetected(e:StationsManagerEvent):void
+			{
+				trace("--RemotePlaylistListenerPanel[onLogoutDetected]-");
+				
+				onlineIndicator.currentState = OnlineIndicator.OFFLINE;
+			}
+			
+			public function show():void
+			{
+				PopUpManager.addPopUp(this, FlexGlobals.topLevelApplication as Application, true);
+				PopUpManager.centerPopUp(this);
+				
+				remotePlaylistListener = context.remotePlaylistListenerBuilder.build();
+				remotePlaylistListener.addEventListener(StationsManagerEvent.STATION_UP_DETECTED, onStationUpDetected);
+				remotePlaylistListener.addEventListener(StationsManagerEvent.STATION_DOWN_DETECTED, onStationDownDetected);
+				
+				remotePlaylistListener.addEventListener(RemotePlaylistListenerEvent.STATION_CONNECTION_LOST, onStationConnectionLost);
+			}
+			
+			public function hide():void
+			{
+				if (remotePlaylistListener)
+				{
+					remotePlaylistListener.removeEventListener(RemotePlaylistListenerEvent.CONNECTION_CLOSED, onConnectionClosed);
+					remotePlaylistListener.removeEventListener(RemotePlaylistListenerEvent.SONG_CHANGED, onSongChanged);
+					remotePlaylistListener.removeEventListener(RemotePlaylistListenerEvent.STOP_PLAYING, onStopPlaying);
+					
+					remotePlaylistListener.removeEventListener(RemotePlaylistListenerEvent.BROADCAST_CONNECTION_LOST, onBroadcasrConnectionLost);
+					remotePlaylistListener.removeEventListener(RemotePlaylistListenerEvent.STATION_CONNECTION_LOST, onStationConnectionLost);
+					
+					remotePlaylistListener.removeEventListener(StationsManagerEvent.STATION_UP_DETECTED, onStationUpDetected);
+					remotePlaylistListener.removeEventListener(StationsManagerEvent.STATION_DOWN_DETECTED, onStationDownDetected);
+					
+					if (remotePlaylistListener.listening)
+						remotePlaylistListener.destroyBroadcast();
+					
+					context.remotePlaylistListenerBuilder.destroy(remotePlaylistListener);
+					remotePlaylistListener = null;
+				}
+				
+				PopUpManager.removePopUp(this);
+			}
+			
+			protected function onStationConnectionLost(event:RemotePlaylistListenerEvent):void
+			{
+				trace("-RemotePlaylistListenerPanel[onStationConnectionLost]-");
+				
+				Alert.show("Station host is lost!", "Error");
+			}
+			
+			protected function onPlaySong(event:MouseEvent):void
+			{
+				trace("-onPlaySong-", songsGrid.selectedItem);
+				
+				if (!remotePlaylistListener.listening)
+				{
+					enabled = false;
+					CursorManager.setBusyCursor();
+					
+					remotePlaylistListener.addEventListener(RemotePlaylistListenerEvent.BROADCAST_CONNECTION_COMPLETE, onBroadcastConnectionComplete);
+					remotePlaylistListener.addEventListener(RemotePlaylistListenerEvent.BROADCAST_CONNECTION_ERROR, onBroadcastConnectionError);
+					remotePlaylistListener.addEventListener(RemotePlaylistListenerEvent.BROADCAST_CONNECTION_LIMIT_ERROR, onBroadcastConnectionLimitError);
+					remotePlaylistListener.addEventListener(RemotePlaylistListenerEvent.BROADCAST_CONNECTION_LOST, onBroadcasrConnectionLost);
+					remotePlaylistListener.createBroadcastConnection();
+				}
+				else
+					remotePlaylistListener.playSong(songsGrid.selectedIndex);
+			}
+			
+			private function onBroadcastConnectionComplete(e:RemotePlaylistListenerEvent):void
+			{
+				trace("-RemotePlaylistListenerPanel[onBroadcastConnectionComplete]-");
+				
+				remotePlaylistListener.removeEventListener(RemotePlaylistListenerEvent.BROADCAST_CONNECTION_COMPLETE, onBroadcastConnectionComplete);
+				remotePlaylistListener.removeEventListener(RemotePlaylistListenerEvent.BROADCAST_CONNECTION_ERROR, onBroadcastConnectionError);
+				remotePlaylistListener.removeEventListener(RemotePlaylistListenerEvent.BROADCAST_CONNECTION_LIMIT_ERROR, onBroadcastConnectionLimitError);
+				
+				remotePlaylistListener.addEventListener(RemotePlaylistListenerEvent.CONNECTION_CLOSED, onConnectionClosed);
+				remotePlaylistListener.addEventListener(RemotePlaylistListenerEvent.SONG_CHANGED, onSongChanged);
+				remotePlaylistListener.addEventListener(RemotePlaylistListenerEvent.STOP_PLAYING, onStopPlaying);
+				
+				remotePlaylistListener.playSong(songsGrid.selectedIndex);
+				
+				enabled = true;
+				CursorManager.removeBusyCursor();
+			}
+			
+			private function onBroadcastConnectionError(e:RemotePlaylistListenerEvent):void
+			{
+				trace("-RemotePlaylistListenerPanel[onBroadcastConnectionError]-");
+				
+				remotePlaylistListener.removeEventListener(RemotePlaylistListenerEvent.BROADCAST_CONNECTION_COMPLETE, onBroadcastConnectionComplete);
+				remotePlaylistListener.removeEventListener(RemotePlaylistListenerEvent.BROADCAST_CONNECTION_ERROR, onBroadcastConnectionError);
+				remotePlaylistListener.removeEventListener(RemotePlaylistListenerEvent.BROADCAST_CONNECTION_LIMIT_ERROR, onBroadcastConnectionLimitError);
+				
+				enabled = true;
+				CursorManager.removeBusyCursor();
+				
+				Alert.show(e.data.error, "Error");
+			}
+			
+			private function onBroadcastConnectionLimitError(e:RemotePlaylistListenerEvent):void
+			{
+				trace("-RemotePlaylistListenerPanel[onBroadcastConnectionLimitError]-");
+				
+				remotePlaylistListener.removeEventListener(RemotePlaylistListenerEvent.BROADCAST_CONNECTION_COMPLETE, onBroadcastConnectionComplete);
+				remotePlaylistListener.removeEventListener(RemotePlaylistListenerEvent.BROADCAST_CONNECTION_ERROR, onBroadcastConnectionError);
+				remotePlaylistListener.removeEventListener(RemotePlaylistListenerEvent.BROADCAST_CONNECTION_LIMIT_ERROR, onBroadcastConnectionLimitError);
+				
+				enabled = true;
+				CursorManager.removeBusyCursor();
+				
+				Alert.show("Broadcast connection limit error!", "Error");
+			}
+			
+			private function onBroadcasrConnectionLost(e:RemotePlaylistListenerEvent):void
+			{
+				trace("-RemotePlaylistListenerPanel[onBroadcasrConnectionLost]-");
+				
+				enabled = true;
+				CursorManager.removeBusyCursor();
+				
+				Alert.show("Broadcast connection lost!");
+			}
+			
+			protected function onConnectionClosed(e:RemotePlaylistListenerEvent):void
+			{
+				hide();
+				
+				Debuger.error("Connection is closed by host!");
+				Debuger.show();
+			}
+			
+			protected function onSongChanged(e:RemotePlaylistListenerEvent):void
+			{
+				songsGrid.selectedIndex = e.index;
+				currentSongTxt.text = songsGrid.selectedItem.path;
+			}
+			
+			protected function onStopPlaying(e:RemotePlaylistListenerEvent):void
+			{
+				currentSongTxt.text = "...";
+			}
+			
+			protected function onChangeVolume():void
+			{
+				remotePlaylistListener.volume = volumeSlider.value;
+			}
+
+			protected function onChangePlayOrder():void
+			{
+				remotePlaylistListener.changePlayOrder(int(playOrderCb.selectedItem.value));
+			}
+			
+			protected function onNextSong():void
+			{
+				remotePlaylistListener.nextSong();
+			}
+			
+			protected function onPreviousSong():void
+			{
+				remotePlaylistListener.previousSong();
+			}
+			
+			protected function onStopSong(event:MouseEvent):void
+			{
+				remotePlaylistListener.stopSong();
+			}
+			
+			protected function onSelectTab(event:IndexChangeEvent):void
+			{
+				currentState = tab.selectedItem.state;
+			}
+			
+			protected function jointToGroup():void
+			{
+				panelsContext.joinToGroupsRequestPanel.show();
+				panelsContext.joinToGroupsRequestPanel.setData(groupsGrid.selectedItem as GroupData);
+			}
+			
+			protected function groupInfo():void
+			{
+				if (groupsGrid.selectedItem)
+				{
+					panelsContext.groupInfoPanel.show();
+					panelsContext.groupInfoPanel.setData(groupsGrid.selectedItem as GroupData);
+				}
+			}
+			
+		]]>
+	</fx:Script>
+	
+	<s:states>
+		<s:State name="init" />
+		<s:State name="loading" />
+		<s:State name="player" />
+		<s:State name="info" />
+	</s:states>
+	
+	<s:VGroup width="100%" height="100%" paddingBottom="15" paddingLeft="15" paddingRight="15" paddingTop="15">
+		
+		<s:VGroup width="100%" height="100%" gap="-1">
+			<s:TabBar id="tab" dataProvider="{tabs}" labelField="title" change="onSelectTab(event)" />
+			
+			<s:Group width="100%" height="100%">
+				
+				<s:Rect width="100%" height="100%">
+					<s:stroke>
+						<s:SolidColorStroke color="0x333333" />
+					</s:stroke>
+				</s:Rect>
+				
+				<!-- INFO -->
+				
+				<s:Group width="100%" includeIn="info, init">
+					<s:VGroup width="100%" paddingLeft="10" paddingTop="15" paddingRight="20" paddingBottom="15">
+						
+						<s:Label text="Name:" />
+						<s:Label text="{playlistContext.name}" />
+						
+						<s:Label text="Info:" paddingTop="10"/>
+						<s:Label text="{playlistContext.info}"/>
+						
+						<s:Label text="Genre: {playlistContext.genre}" paddingTop="10"/>
+						
+						<s:Label text="Type: {channelType}" paddingTop="10"/>
+						
+						<mx:DataGrid id="groupsGrid" dataProvider="{groupsCollection}" width="100%" 
+									 doubleClickEnabled="true"
+									 doubleClick="groupInfo()"
+									 rowCount="4">
+							<mx:columns>
+								<mx:DataGridColumn dataField="name" headerText="Name"  />
+							</mx:columns>
+						</mx:DataGrid>
+						
+						<s:HGroup>
+							<s:Button label="View group info" enabled="{groupsGrid.selectedItem}" 
+									  click="groupInfo()"/>
+							<s:Button label="Send join to group request" enabled="{groupsGrid.selectedItem}" 
+									  click="jointToGroup()" />
+						</s:HGroup>
+						
+					</s:VGroup>
+				</s:Group>
+				
+				<!-- PLAYER -->
+				
+				<s:VGroup id="contentContainer" width="100%" includeIn="player, init" 
+						  paddingBottom="10" paddingLeft="10" paddingRight="10" paddingTop="10">
+					
+					<s:Group width="100%">
+						
+						<s:HGroup>
+							<s:Button label="&lt;" width="40" enabled="{songsGrid.selectedItem &amp;&amp; remotePlaylistListener}"
+									  click="onPreviousSong()" />
+							<s:Button label="Play" enabled="{songsGrid.selectedItem}" 
+									  click="onPlaySong(event)"/>
+							<s:Button label="Stop" enabled="{songsGrid.selectedItem &amp;&amp; remotePlaylistListener}" 
+									  click="onStopSong(event)"/>
+							<s:Button label="&gt;" width="40" enabled="{songsGrid.selectedItem &amp;&amp; remotePlaylistListener}"
+									  click="onNextSong()" />
+						</s:HGroup>
+						
+						<s:HGroup right="0" verticalAlign="middle">
+							<s:HSlider id="volumeSlider" width="200" value="1" minimum="0" maximum="1" snapInterval="0.01" 
+									   change="onChangeVolume()"/>
+							<s:Label text="Order:" paddingLeft="20" />
+							<s:ComboBox id="playOrderCb" dataProvider="{context.playOrders}" labelField="title" selectedIndex="0"
+										change="onChangePlayOrder()"/>
+						</s:HGroup>
+						
+					</s:Group>
+					
+					
+					<s:VGroup width="100%">
+						
+						<s:Group width="100%" height="25">
+							<s:Rect width="100%" height="100%" radiusX="2" radiusY="2">
+								<s:fill>
+									<s:SolidColor color="0xe7e7e7" />
+								</s:fill>
+							</s:Rect>
+							
+							<s:HGroup left="7" verticalCenter="1">
+								<s:Label text="Now plaing:" fontWeight="bold" />
+								<s:Label id="currentSongTxt" text="..." />
+							</s:HGroup>
+							
+						</s:Group>
+						
+						<mx:DataGrid id="songsGrid" dataProvider="{playlistCollection}" width="100%" rowCount="18"
+									 doubleClickEnabled="true"
+									 doubleClick="onPlaySong(event)">
+							<mx:columns>
+								<mx:DataGridColumn dataField="path" headerText="Path" />
+							</mx:columns>
+						</mx:DataGrid>
+						
+					</s:VGroup>
+					
+				</s:VGroup>
+				
+			</s:Group>
+		</s:VGroup>
+		
+		<s:Group width="100%">
+			<s:Button label="Close" click="hide()" />
+			<indicators:OnlineIndicator id="onlineIndicator" right="0" />	
+		</s:Group>
+		
+	</s:VGroup>
+	
+</s:Panel>

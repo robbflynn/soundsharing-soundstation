@@ -1,0 +1,334 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Panel xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx"
+		 initialize="currentState='init';"
+		 width="550">
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.controls.Alert;
+			import mx.core.FlexGlobals;
+			import mx.managers.PopUpManager;
+			
+			import soundshare.sdk.db.mongo.base.events.MongoDBRestEvent;
+			import soundshare.sdk.db.mongo.groups.GroupsDataManager;
+			import soundshare.station.data.StationContext;
+			import soundshare.station.data.PanelsContext;
+			import soundshare.station.data.channels.ChannelContext;
+			import soundshare.station.data.groups.GroupData;
+			import soundshare.station.listeners.remote.srb.StandardRadioListener;
+			import soundshare.station.listeners.remote.srb.events.StandardRadioListenerEvent;
+			
+			import spark.components.Application;
+			import spark.events.IndexChangeEvent;
+			
+			[Bindable] private var tabs:ArrayCollection = new ArrayCollection([
+				{title: "Player", state: "player"}, 
+				{title: "Information", state: "info"}
+			]);
+			
+			[Bindable] private var artist:String;
+			[Bindable] private var album:String;
+			[Bindable] private var songName:String;
+			[Bindable] private var genre:String;
+			[Bindable] private var year:String;
+			[Bindable] private var live:Boolean = false;
+			
+			[Bindable] private var channelType:String;
+			[Bindable] private var groupsCollection:ArrayCollection = new ArrayCollection();
+			
+			[Bindable] private var channelContext:ChannelContext;
+			
+			private var context:StationContext;
+			private var panelsContext:PanelsContext;
+			
+			private var standardRadioListener:StandardRadioListener;
+			
+			public function init(context:StationContext, panelsContext:PanelsContext):void
+			{
+				this.context = context;
+				this.panelsContext = panelsContext;
+				
+				this.groupsCollection.filterFunction = filterFunction;
+			}
+			
+			public function setData(channelContext:ChannelContext, groupsCollection:ArrayCollection = null, showPlayer:Boolean = true):void
+			{
+				this.channelContext = channelContext;
+				
+				channelType = context.playlistTypes[channelContext.type];
+				
+				if (groupsCollection)
+				{
+					this.groupsCollection.source = [].concat(groupsCollection.source);
+					this.groupsCollection.refresh();
+					
+					if (showPlayer)
+						currentState = 'player';
+					else
+						currentState = 'info';
+				}
+				else
+				{
+					this.groupsCollection.removeAll();
+					
+					if (channelContext.groups && channelContext.groups.length > 0)
+					{
+						currentState = 'loading';
+						
+						var groupsDataManager:GroupsDataManager = context.groupsDataManagersBuilder.build();
+						groupsDataManager.addEventListener(MongoDBRestEvent.COMPLETE, onGroupsComplete);
+						groupsDataManager.addEventListener(MongoDBRestEvent.ERROR, onGroupsError);
+						groupsDataManager.getRecordsList({_id: {$in: channelContext.groups}});
+					}
+					else
+					if (showPlayer)
+						currentState = 'player';
+					else
+						currentState = 'info';
+				}
+			}
+			
+			private function onGroupsComplete(e:MongoDBRestEvent):void
+			{
+				e.currentTarget.removeEventListener(MongoDBRestEvent.COMPLETE, onGroupsComplete);
+				e.currentTarget.removeEventListener(MongoDBRestEvent.ERROR, onGroupsError);
+				
+				context.groupsDataManagersBuilder.destroy(e.currentTarget as GroupsDataManager);
+				
+				var groups:Array = e.data as Array;
+				var groupData:GroupData;
+				
+				for (var i:int = 0;i < groups.length;i ++)
+				{
+					groupData = new GroupData();
+					groupData.readObject(groups[i]);
+					
+					groupsCollection.addItem(groupData);
+				}
+				
+				currentState = 'player';
+				
+				trace("onGroupsComplete:", groupsCollection.length);
+			}
+			
+			private function onGroupsError(e:MongoDBRestEvent):void
+			{
+				e.currentTarget.removeEventListener(MongoDBRestEvent.COMPLETE, onGroupsComplete);
+				e.currentTarget.removeEventListener(MongoDBRestEvent.ERROR, onGroupsError);
+				
+				context.groupsDataManagersBuilder.destroy(e.currentTarget as GroupsDataManager);
+				
+				Alert.show("Error groups list!");
+			}
+			
+			private function filterFunction(item:Object):Boolean
+			{
+				return channelContext.groups.indexOf(item._id) != -1;
+			}
+			
+			private function play():void
+			{
+				if (!standardRadioListener)
+				{
+					live = true;
+					
+					standardRadioListener = context.standardRadioListenerBuilder.build(channelContext.route);
+					standardRadioListener.addEventListener(StandardRadioListenerEvent.AUDIO_INFO_DATA, onAudioInfoData);
+					standardRadioListener.addEventListener(StandardRadioListenerEvent.CONNECTION_LOST, onConnectionLost);
+					standardRadioListener.start();
+				}
+			}
+			
+			private function stop():void
+			{
+				if (standardRadioListener)
+				{
+					live = false;
+					
+					standardRadioListener.removeEventListener(StandardRadioListenerEvent.AUDIO_INFO_DATA, onAudioInfoData);
+					standardRadioListener.stop();
+					
+					context.standardRadioListenerBuilder.destroy(standardRadioListener);
+					standardRadioListener = null;
+				}
+			}
+			
+			private function onAudioInfoData(e:StandardRadioListenerEvent):void
+			{
+				var audioInfoData:Object = e.data;
+				
+				artist = "Unknown";
+				album = "Unknown";
+				songName = "Unknown";
+				genre = "Unknown";
+				year = "Unknown";
+				
+				if (audioInfoData && audioInfoData.xtype == "ID3" && audioInfoData.data)
+				{
+					artist = audioInfoData.data.artist ? audioInfoData.data.artist : artist;
+					album = audioInfoData.data.album ? audioInfoData.data.album : album;
+					songName = audioInfoData.data.songName ? audioInfoData.data.songName : songName;
+					genre = audioInfoData.data.genre ? audioInfoData.data.genre : genre;
+					year = audioInfoData.data.year ? audioInfoData.data.year : year;
+					
+					trace("-------- RECEIVE onBroadcastMediaInfo ----------", e.data.xtype);
+				}
+				
+				trace("artist:", artist);
+				trace("album:", album);
+				trace("songName:", songName);
+				trace("genre:", genre);
+				trace("year:", year);
+				
+				trace("-------- ******************** ----------");
+			}
+			
+			private function onConnectionLost(e:StandardRadioListenerEvent):void
+			{
+				live = false;
+				trace("-onConnectionLost-");
+			}
+			
+			public function show():void
+			{
+				PopUpManager.addPopUp(this, FlexGlobals.topLevelApplication as Application, true);
+				PopUpManager.centerPopUp(this);
+			}
+			
+			protected function close():void
+			{
+				stop();
+				PopUpManager.removePopUp(this);
+			}
+			
+			protected function onChangeVolume():void
+			{
+				standardRadioListener.volume = volumeSlider.value;
+				
+				//trace("onChangeVolume:", standardRadioListener.volume);
+			}
+			
+			protected function onSelectTab(event:IndexChangeEvent):void
+			{
+				currentState = tab.selectedItem.state;
+			}
+			
+			protected function jointToGroup():void
+			{
+				panelsContext.joinToGroupsRequestPanel.show();
+				panelsContext.joinToGroupsRequestPanel.setData(groupsGrid.selectedItem as GroupData);
+			}
+			
+			protected function groupInfo():void
+			{
+				if (groupsGrid.selectedItem)
+				{
+					panelsContext.groupInfoPanel.show();
+					panelsContext.groupInfoPanel.setData(groupsGrid.selectedItem as GroupData);
+				}
+			}
+
+		]]>
+	</fx:Script>
+	
+	<s:states>
+		<s:State name="init" />
+		<s:State name="loading" />
+		<s:State name="player" />
+		<s:State name="info" />
+	</s:states>
+	
+	<s:VGroup width="100%" height="100%" paddingBottom="15" paddingLeft="15" paddingTop="20" paddingRight="15">
+		
+		<s:VGroup width="100%" height="100%" gap="-1">
+			<s:TabBar id="tab" dataProvider="{tabs}" labelField="title" change="onSelectTab(event)" />
+			
+			<s:Group width="100%" height="100%">
+				
+				<s:Rect width="100%" height="100%">
+					<s:stroke>
+						<s:SolidColorStroke color="0x333333" />
+					</s:stroke>
+				</s:Rect>
+				
+				<s:Group width="100%" includeIn="info, init">
+					<s:VGroup width="100%" paddingLeft="10" paddingTop="15" paddingRight="20" paddingBottom="15">
+						
+						<s:Label text="Name:" />
+						<s:Label text="{channelContext.name}" />
+						
+						<s:Label text="Info:" paddingTop="10"/>
+						<s:Label text="{channelContext.info}"/>
+						
+						<s:Label text="Genre: {channelContext.genre}" paddingTop="10"/>
+						
+						<s:Label text="Type: {channelType}" paddingTop="10"/>
+						
+						<mx:DataGrid id="groupsGrid" dataProvider="{groupsCollection}" width="100%" 
+									 doubleClickEnabled="true"
+									 doubleClick="groupInfo()"
+									 rowCount="4">
+							<mx:columns>
+								<mx:DataGridColumn dataField="name" headerText="Name"  />
+							</mx:columns>
+						</mx:DataGrid>
+						
+						<s:HGroup>
+							<s:Button label="View group info" enabled="{groupsGrid.selectedItem}" 
+									  click="groupInfo()"/>
+							<s:Button label="Send join to group request" enabled="{groupsGrid.selectedItem}" 
+									  click="jointToGroup()" />
+						</s:HGroup>
+						
+					</s:VGroup>
+				</s:Group>
+				
+				<s:VGroup width="100%" includeIn="player, init"
+						  paddingBottom="10" paddingLeft="10" paddingRight="10" paddingTop="10">
+					
+					<s:HGroup>
+						<s:VGroup>
+							<s:Label text="Artists:" fontWeight="bold" />
+							<s:Label text="Album:" fontWeight="bold" />
+							<s:Label text="Song name:" fontWeight="bold" />
+							<s:Label text="Genre:" fontWeight="bold" />
+							<s:Label text="Year:" fontWeight="bold" />
+							<s:Label text="Live:" fontWeight="bold" />
+						</s:VGroup>
+						
+						<s:VGroup>
+							<s:Label text="{artist}" />
+							<s:Label text="{album}" />
+							<s:Label text="{songName}" />
+							<s:Label text="{genre}" />
+							<s:Label text="{year}" />
+							<s:Label text="{live}" />
+						</s:VGroup>
+						
+					</s:HGroup>
+					
+					<s:VGroup>
+						<s:HSlider id="volumeSlider" value="1" minimum="0" maximum="2" snapInterval="0.001" 
+								   change="onChangeVolume()" />
+					</s:VGroup>
+					
+					<s:HGroup paddingTop="15">
+						<s:Button label="Play" click="play()" />
+						<s:Button label="Stop" click="stop();" />
+					</s:HGroup>
+					
+				</s:VGroup>
+				
+			</s:Group>
+		</s:VGroup>
+		
+		<s:Group width="100%">
+			<s:Button label="Close" click="close()" />
+		</s:Group>
+		
+	</s:VGroup>
+	
+</s:Panel>

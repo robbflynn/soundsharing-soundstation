@@ -1,0 +1,128 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Panel xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx"
+		 title="Edit playlist">
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.controls.Alert;
+			import mx.core.FlexGlobals;
+			import mx.managers.PopUpManager;
+			
+			import soundshare.sdk.data.servers.ServerData;
+			import soundshare.sdk.db.mongo.base.events.MongoDBRestEvent;
+			import soundshare.sdk.db.mongo.servers.ServersDataManager;
+			import soundshare.station.data.StationContext;
+			
+			import spark.components.Application;
+			
+			[Bindable] private var context:StationContext;
+			
+			private var serverData:ServerData;
+			
+			public function init(context:StationContext):void
+			{
+				this.context = context;
+			}
+			
+			public function setData(serverData:ServerData):void
+			{
+				this.serverData = serverData;
+				
+				idTxt.text = serverData._id;
+				nameTxt.text = serverData.name;
+				secureIdTxt.text = serverData.secureId;
+				addressTxt.text = serverData.address;
+				portTxt.text = String(serverData.port);
+				radioButtonGroup.selectedValue = serverData.type;
+			}
+			
+			protected function onEdit():void
+			{
+				var groupsDataManager:ServersDataManager = context.serversDataManagersBuilder.build();
+				
+				groupsDataManager.addEventListener(MongoDBRestEvent.COMPLETE, onEditServerComplete);
+				groupsDataManager.addEventListener(MongoDBRestEvent.ERROR, onEditServerError);
+				groupsDataManager.updateRecord(serverData._id, context.sessionId, {
+					name: nameTxt.text,
+					secureId: secureIdTxt.text,
+					address: addressTxt.text,
+					port: int(portTxt.text),
+					type: radioButtonGroup.selectedValue
+				});
+			}
+			
+			private function onEditServerComplete(e:MongoDBRestEvent):void
+			{
+				e.currentTarget.removeEventListener(MongoDBRestEvent.COMPLETE, onEditServerComplete);
+				e.currentTarget.removeEventListener(MongoDBRestEvent.ERROR, onEditServerError);
+				
+				context.serversDataManagersBuilder.destroy(e.currentTarget as ServersDataManager);
+				
+				serverData.readObject(e.data);
+				context.servers.refresh();
+				
+				close();
+			}
+			
+			private function onEditServerError(e:MongoDBRestEvent):void
+			{
+				e.currentTarget.removeEventListener(MongoDBRestEvent.COMPLETE, onEditServerComplete);
+				e.currentTarget.removeEventListener(MongoDBRestEvent.ERROR, onEditServerError);
+				
+				context.serversDataManagersBuilder.destroy(e.currentTarget as ServersDataManager);
+				
+				Alert.show("Error!");
+			}
+			
+			public function show():void
+			{
+				PopUpManager.addPopUp(this, FlexGlobals.topLevelApplication as Application, true);
+				PopUpManager.centerPopUp(this);
+			}
+			
+			protected function close():void
+			{
+				PopUpManager.removePopUp(this);
+			}
+			
+		]]>
+	</fx:Script>
+	
+	<fx:Declarations>
+		<s:RadioButtonGroup id="radioButtonGroup" />
+	</fx:Declarations>
+	
+	<s:VGroup paddingBottom="15" paddingLeft="15" paddingTop="20" paddingRight="15">
+		
+		<s:Label text="ID:" />
+		<s:TextInput id="idTxt" width="350" editable="false" />
+		
+		<s:Label text="Name:" />
+		<s:TextInput id="nameTxt" width="350" />
+		
+		<s:Label text="Secure ID:" />
+		<s:TextInput id="secureIdTxt" width="550" />
+		
+		<s:Label text="Address:" />
+		<s:TextInput id="addressTxt" width="550" />
+		
+		<s:Label text="Port:" />
+		<s:TextInput id="portTxt" width="550" />
+		
+		<s:Label text="Type:" paddingTop="10"/>
+		<s:HGroup>
+			<s:RadioButton id="publicType" label="public" value="0" group="{radioButtonGroup}" selected="true" />
+			<s:RadioButton label="private" value="1" group="{radioButtonGroup}" />
+		</s:HGroup>
+		
+		<s:HGroup paddingTop="15">
+			<s:Button label="Save" click="onEdit()" />
+			<s:Button label="Cancel" click="close()" />
+		</s:HGroup>
+		
+	</s:VGroup>
+	
+</s:Panel>

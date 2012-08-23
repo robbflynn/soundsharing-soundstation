@@ -1,0 +1,171 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Panel xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx"
+		 title="Stations"
+		 width="700" height="450">
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.controls.Alert;
+			import mx.core.FlexGlobals;
+			import mx.events.CollectionEvent;
+			import mx.managers.PopUpManager;
+			
+			import soundshare.station.content.pages.station.panels.stations.renderers.StationRenderer;
+			import soundshare.station.content.pages.station.panels.stations.renderers.events.StationRendererEvent;
+			import soundshare.station.controllers.station.events.StationControllerEvent;
+			import soundshare.station.data.StationContext;
+			import soundshare.sdk.db.mongo.base.events.MongoDBRestEvent;
+			import soundshare.sdk.db.mongo.stations.StationsDataManager;
+			import soundshare.sdk.managers.stations.StationsManager;
+			
+			import spark.components.Application;
+			import spark.events.RendererExistenceEvent;
+			
+			[Bindable] private var context:StationContext;
+			[Bindable] private var stationCollection:ArrayCollection = new ArrayCollection();
+			
+			public function init(context:StationContext):void
+			{
+				this.context = context;
+				
+				context.stations.addEventListener(CollectionEvent.COLLECTION_CHANGE, onCollectionChange);
+				
+				stationCollection.source = context.stations.source;
+				stationCollection.filterFunction = filterFunction;
+				stationCollection.refresh();
+			}
+			
+			private function onCollectionChange(e:CollectionEvent):void
+			{
+				stationCollection.refresh();
+			}
+			
+			public function show():void
+			{
+				PopUpManager.addPopUp(this, FlexGlobals.topLevelApplication as Application, true);
+				PopUpManager.centerPopUp(this);
+			}
+			
+			protected function close():void
+			{
+				PopUpManager.removePopUp(this);
+			}
+			
+			private function filterFunction(item:Object):Boolean
+			{
+				return item._id != context.applicationSettings.settings.stationId;
+			}
+			
+			protected function addRender(e:RendererExistenceEvent):void
+			{
+				(e.renderer as StationRenderer).addEventListener(StationRendererEvent.DELETE, onDeleteStation);
+				(e.renderer as StationRenderer).addEventListener(StationRendererEvent.SHUT_DOWN, onShutDownStation);
+			}
+			
+			protected function removeRender(e:RendererExistenceEvent):void
+			{
+				(e.renderer as StationRenderer).removeEventListener(StationRendererEvent.DELETE, onDeleteStation);
+				(e.renderer as StationRenderer).removeEventListener(StationRendererEvent.SHUT_DOWN, onShutDownStation);
+			}
+			
+			private function onDeleteStation(e:StationRendererEvent):void
+			{
+				var stationsDataManager:StationsDataManager = context.stationsDataManagersBuilder.build();
+				
+				stationsDataManager.addEventListener(MongoDBRestEvent.COMPLETE, onRemoveStationComplete);
+				stationsDataManager.addEventListener(MongoDBRestEvent.ERROR, onRemoveStationError);
+				stationsDataManager.deleteRecord(context.sessionId, {_id: e.stationData._id});
+			}
+			
+			private function onRemoveStationComplete(e:MongoDBRestEvent):void
+			{
+				trace("onRemoveStationComplete:");
+				
+				e.currentTarget.removeEventListener(MongoDBRestEvent.COMPLETE, onRemoveStationComplete);
+				e.currentTarget.removeEventListener(MongoDBRestEvent.ERROR, onRemoveStationError);
+				
+				context.stationsDataManagersBuilder.destroy(e.currentTarget as StationsDataManager);
+				
+				context.stations.removeItemAt(context.stations.getItemIndex(stationsGrid.selectedItem));
+				context.stations.refresh();
+				
+				Alert.show("Station is deleted!");
+			}
+			
+			private function onRemoveStationError(e:MongoDBRestEvent):void
+			{
+				e.currentTarget.removeEventListener(MongoDBRestEvent.COMPLETE, onRemoveStationComplete);
+				e.currentTarget.removeEventListener(MongoDBRestEvent.ERROR, onRemoveStationError);
+				
+				context.stationsDataManagersBuilder.destroy(e.currentTarget as StationsDataManager);
+				
+				Alert.show("Error delete!");
+			}
+			
+			protected function onShutDownStation(e:StationRendererEvent):void
+			{
+				var stationsManager:StationsManager = context.stationsManagersBuilder.build();
+				stationsManager.shutDownStation(e.stationData._id);
+				
+				context.stationsManagersBuilder.destroy(stationsManager);
+			}
+			
+			private function switchStation():void
+			{
+				context.stationController.addEventListener(StationControllerEvent.EMITTER_STATION_DOWN_COMPLETE, onStationDown);
+				context.stationController.addEventListener(StationControllerEvent.EMITTER_STATION_DOWN_ERROR, onStationError);
+				context.stationController.stationDown();
+			}
+			
+			private function onStationDown(e:StationControllerEvent):void
+			{
+				context.stationController.removeEventListener(StationControllerEvent.EMITTER_STATION_DOWN_COMPLETE, onStationDown);
+				context.stationController.removeEventListener(StationControllerEvent.EMITTER_STATION_DOWN_ERROR, onStationError);
+				
+				close();
+			}
+			
+			private function onStationError(e:StationControllerEvent):void
+			{
+				context.stationController.removeEventListener(StationControllerEvent.EMITTER_STATION_DOWN_COMPLETE, onStationDown);
+				context.stationController.removeEventListener(StationControllerEvent.EMITTER_STATION_DOWN_ERROR, onStationError);
+				
+				close();
+				Alert.show("Station down error!");
+			}
+			
+		]]>
+	</fx:Script>
+	
+	<s:HGroup width="100%" height="100%" paddingBottom="10" paddingLeft="10" paddingRight="10" paddingTop="10">
+		
+		<s:VGroup height="100%" width="100%">
+			
+			<s:Button label="Switch station" click="switchStation()" />
+			
+			<s:Scroller width="100%" height="100%">
+				<s:Group>
+					<s:List id="stationsGrid" width="100%" dataProvider="{stationCollection}"
+							itemRenderer="soundshare.station.content.pages.station.panels.stations.renderers.StationRenderer"
+							rendererAdd="addRender(event)"
+							rendererRemove="removeRender(event)"
+							borderVisible="false">
+						<s:layout>
+							<s:VerticalLayout />
+						</s:layout>
+					</s:List>
+				</s:Group>
+			</s:Scroller>
+			
+			<s:HGroup>
+				<s:Button label="Close" click="close()" />
+			</s:HGroup>
+			
+		</s:VGroup>
+		
+	</s:HGroup>
+	
+</s:Panel>

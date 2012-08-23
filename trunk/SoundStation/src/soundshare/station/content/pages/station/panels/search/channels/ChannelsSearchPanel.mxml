@@ -1,0 +1,183 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx" 
+		 xmlns:paginators="soundshare.station.components.paginators.*"
+		 currentState="result">
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.controls.Alert;
+			import mx.managers.CursorManager;
+			
+			import soundshare.sdk.db.mongo.base.events.MongoDBRestEvent;
+			import soundshare.sdk.db.mongo.channels.ChannelsDataManager;
+			import soundshare.station.data.StationContext;
+			import soundshare.station.data.PanelsContext;
+			import soundshare.station.data.channels.ChannelContext;
+			
+			[Bindable] private var context:StationContext;
+			[Bindable] private var panelsContext:PanelsContext;
+			
+			[Bindable] private var channels:ArrayCollection = new ArrayCollection();
+			
+			private var tmpChannelsDataManager:ChannelsDataManager
+			
+			public function init(context:StationContext, panelsContext:PanelsContext):void
+			{
+				this.context = context;
+				this.panelsContext = panelsContext;
+			}
+			
+			protected function startSearching():void
+			{
+				currentState = "searching";
+				
+				tmpChannelsDataManager = context.channelsDataManagersBuilder.build();
+				tmpChannelsDataManager.addEventListener(MongoDBRestEvent.COMPLETE, onChannelsListComplete);
+				tmpChannelsDataManager.addEventListener(MongoDBRestEvent.ERROR, onChannelsListError);
+				tmpChannelsDataManager.getRecordsList({});
+			}
+			
+			protected function stopSearching():void
+			{
+				tmpChannelsDataManager.removeEventListener(MongoDBRestEvent.COMPLETE, onChannelsListComplete);
+				tmpChannelsDataManager.removeEventListener(MongoDBRestEvent.ERROR, onChannelsListError);
+				
+				tmpChannelsDataManager.close();
+				tmpChannelsDataManager = null;
+				
+				currentState = "result";
+			}
+			
+			private function onChannelsListComplete(e:MongoDBRestEvent):void
+			{
+				e.currentTarget.removeEventListener(MongoDBRestEvent.COMPLETE, onChannelsListComplete);
+				e.currentTarget.removeEventListener(MongoDBRestEvent.ERROR, onChannelsListError);
+				
+				var collection:Array = e.data as Array;
+				
+				trace("onChannelsListComplete:", collection.length);
+				
+				channels.removeAll();
+				
+				var channelContext:ChannelContext
+				
+				for (var i:int = 0;i < collection.length;i ++)
+				{
+					channelContext = new ChannelContext();
+					channelContext.readObject(collection[i]);
+					
+					channels.addItem(channelContext);
+				}
+				
+				context.channelsDataManagersBuilder.destroy(e.currentTarget as ChannelsDataManager);
+				
+				currentState = "result";
+				tmpChannelsDataManager = null;
+			}
+			
+			private function onChannelsListError(e:MongoDBRestEvent):void
+			{
+				e.currentTarget.removeEventListener(MongoDBRestEvent.COMPLETE, onChannelsListComplete);
+				e.currentTarget.removeEventListener(MongoDBRestEvent.ERROR, onChannelsListError);
+				
+				context.channelsDataManagersBuilder.destroy(e.currentTarget as ChannelsDataManager);
+				
+				currentState = "result";
+				tmpChannelsDataManager = null;
+				
+				Alert.show("Error result!");
+			}
+			
+			private function listenChannel():void
+			{
+				panelsContext.channelPlayerPanel.show();
+				panelsContext.channelPlayerPanel.setData(channelsGrid.selectedItem as ChannelContext);
+			}
+			
+			//**************************************************************************************************************
+			//**************************************************************************************************************
+			//**************************************************************************************************************
+			
+			private function onCollectionDataChange(e:Event):void
+			{
+				channels.refresh();
+			}
+			
+			private function typeLabelFunc(item:Object, column:DataGridColumn):String 
+			{
+				return context.playlistTypes[item.type];
+			}
+			
+			private function statusLabelFunc(item:Object, column:DataGridColumn):String 
+			{
+				switch (item.status)
+				{
+					case 0:
+						return "Stand by";
+						break;
+					case 1:
+						return "Broadcasting";
+						break;
+				}
+				
+				return "Unknown";
+			}
+			
+			private function genreLabelFunc(item:Object, column:DataGridColumn):String 
+			{
+				if (!item.genre)
+					return "Unknown";
+				
+				return String(item.genre).split(",").join(", ");
+			}
+			
+		]]>
+	</fx:Script>
+	
+	<s:states>
+		<s:State name="searching" />
+		<s:State name="result" />
+	</s:states>
+	
+	<s:VGroup width="100%" height="100%" paddingBottom="10" paddingLeft="10" paddingRight="10" paddingTop="10">
+		
+		<s:HGroup>
+			<s:TextInput id="searchTxt" width="350" />
+			<s:Button label="Search" click="startSearching()" includeIn="result" />
+			<s:Button label="Stop" click="stopSearching()" includeIn="searching" />
+			<s:Button label="Listen channel" click="listenChannel()" 
+					  enabled="{channelsGrid.selectedItem}"/>
+		</s:HGroup>
+		
+		<s:Group width="100%" height="100%">
+			<s:VGroup width="100%" height="100%">
+				<mx:DataGrid id="channelsGrid" dataProvider="{channels}" width="100%" height="100%"
+							 doubleClickEnabled="true"
+							 doubleClick="listenChannel()">
+					<mx:columns>
+						<mx:DataGridColumn dataField="name" headerText="Name"  />
+						<mx:DataGridColumn labelFunction="genreLabelFunc" headerText="Genre"  />
+						<mx:DataGridColumn labelFunction="statusLabelFunc" headerText="Status" textAlign="center" width="100"/>
+						<mx:DataGridColumn labelFunction="typeLabelFunc" headerText="Type" textAlign="center" width="80"/>
+					</mx:columns>
+				</mx:DataGrid>
+				
+				<paginators:Paginator />
+			</s:VGroup>
+			
+			<s:Group width="100%" height="100%" includeIn="searching">
+				<s:Rect width="100%" height="100%">
+					<s:fill>
+						<s:SolidColor color="0xFFFFFF" alpha="0.5" />
+					</s:fill>
+				</s:Rect>
+			</s:Group>
+			
+		</s:Group>
+		
+	</s:VGroup>
+	
+</s:Group>

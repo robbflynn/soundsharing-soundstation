@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Panel xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx"
+		 title="Station settings">
+	
+	<fx:Metadata>
+		[Event(name="complete", type="flash.events.Event")]
+	</fx:Metadata>
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.controls.Alert;
+			import mx.core.FlexGlobals;
+			import mx.managers.CursorManager;
+			import mx.managers.PopUpManager;
+			
+			import soundshare.sdk.db.mongo.base.MongoDBRest;
+			import soundshare.sdk.db.mongo.base.events.MongoDBRestEvent;
+			import soundshare.sdk.db.mongo.groups.GroupsDataManager;
+			import soundshare.sdk.db.mongo.stations.StationsDataManager;
+			import soundshare.station.content.panels.notifications.renderers.JointToGroupReguestRenderer;
+			import soundshare.station.content.panels.notifications.renderers.events.JointToGroupReguestRendererEvent;
+			import soundshare.station.data.StationContext;
+			import soundshare.station.data.PanelsContext;
+			import soundshare.station.data.channels.ChannelContext;
+			import soundshare.station.data.groups.GroupData;
+			import soundshare.station.data.notifications.NotificationData;
+			import soundshare.sdk.data.platlists.PlaylistContext;
+			import soundshare.station.managers.notifications.events.NotificationsManagerEvent;
+			
+			import spark.components.Application;
+			import spark.events.RendererExistenceEvent;
+			
+			[Bindable] private var context:StationContext;
+			
+			public function init(context:StationContext):void
+			{
+				this.context = context;
+			}
+			
+			public function show():void
+			{
+				PopUpManager.addPopUp(this, FlexGlobals.topLevelApplication as Application, true);
+				PopUpManager.centerPopUp(this);
+				
+				stationNameTxt.text = context.applicationSettings.settings.stationData.name;
+			}
+			
+			protected function close():void
+			{
+				PopUpManager.removePopUp(this);
+			}
+			
+			protected function save():void
+			{
+				trace("-save-");
+				var stationsDataManager:StationsDataManager = context.stationsDataManagersBuilder.build();
+				stationsDataManager.addEventListener(MongoDBRestEvent.COMPLETE, onSaveComplete);
+				stationsDataManager.addEventListener(MongoDBRestEvent.ERROR, onSaveError);
+			}
+			
+			private function onSaveComplete(e:MongoDBRestEvent):void
+			{
+				trace("-onSaveComplete-");
+				
+				e.currentTarget.removeEventListener(MongoDBRestEvent.COMPLETE, onSaveComplete);
+				e.currentTarget.removeEventListener(MongoDBRestEvent.ERROR, onSaveError);
+				
+				context.stationsDataManagersBuilder.destroy(e.currentTarget as StationsDataManager);
+				
+				context.applicationSettings.settings.stationData.readObject(e.data);
+				context.applicationSettings.save();
+				
+				dispatchEvent(new Event(Event.COMPLETE));
+			}
+			
+			private function onSaveError(e:MongoDBRestEvent):void
+			{
+				trace("-onSaveError-");
+				
+				e.currentTarget.removeEventListener(MongoDBRestEvent.COMPLETE, onSaveComplete);
+				e.currentTarget.removeEventListener(MongoDBRestEvent.ERROR, onSaveError);
+				
+				context.stationsDataManagersBuilder.destroy(e.currentTarget as StationsDataManager);
+				
+				Alert.show("Unable to save station settings!");
+			}
+			
+		]]>
+	</fx:Script>
+	
+	<s:VGroup paddingBottom="15" paddingLeft="15" paddingTop="20" paddingRight="15">
+		
+		<s:Label text="Station name:" />
+		<s:TextInput id="stationNameTxt" width="350" />
+		
+		<s:HGroup paddingTop="15">
+			<s:Button label="Continue" click="save()" />
+		</s:HGroup>
+		
+	</s:VGroup>
+	
+</s:Panel>

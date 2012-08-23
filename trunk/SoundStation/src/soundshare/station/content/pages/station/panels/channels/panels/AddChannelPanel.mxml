@@ -1,0 +1,247 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Panel xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx"
+		 title="Create channel">
+	
+	<fx:Script>
+		<![CDATA[
+			import flash.net.dns.AAAARecord;
+			
+			import mx.collections.ArrayCollection;
+			import mx.controls.Alert;
+			import mx.core.FlexGlobals;
+			import mx.managers.PopUpManager;
+			
+			import soundshare.station.content.pages.station.panels.channels.panels.broadcast.radio.StandardRadioBroadcastSettingsPanel;
+			import soundshare.station.content.pages.station.panels.channels.panels.rights.ManageChannelRightsPanel;
+			import soundshare.station.data.StationContext;
+			import soundshare.station.data.PanelsContext;
+			import soundshare.station.data.channels.ChannelContext;
+			import soundshare.station.data.channels.broadcasts.StandardRadioContext;
+			import soundshare.station.data.groups.GroupData;
+			import soundshare.sdk.data.plugin.PluginConfigurationData;
+			import soundshare.sdk.data.plugin.PluginData;
+			import soundshare.sdk.db.mongo.base.events.MongoDBRestEvent;
+			import soundshare.sdk.db.mongo.channels.ChannelsDataManager;
+			
+			import spark.components.Application;
+			
+			import utils.collection.CollectionUtil;
+			
+			[Bindable] private var context:StationContext;
+			[Bindable] private var genres:ArrayCollection = new ArrayCollection();
+			
+			[Bindable] private var pluginsCollection:ArrayCollection = new ArrayCollection();
+			
+			private var manageChannelRightsPanel:ManageChannelRightsPanel;
+			
+			private var stationId:String;
+			
+			public function init(context:StationContext, panelsContext:PanelsContext):void
+			{
+				this.context = context;
+				
+				for (var i:int = 0; i < context.genres.length;i ++)
+					genres.addItem({title: context.genres[i], selected: false});
+				
+				manageChannelRightsPanel = new ManageChannelRightsPanel();
+				manageChannelRightsPanel.init(context, panelsContext);
+				
+				pluginsCollection.filterFunction = filterFunction;
+			}
+			
+			public function setData(stationId:String):void
+			{
+				this.stationId = stationId;
+				
+				context.selectedChannel = new ChannelContext();
+				
+				pluginsCollection.source = context.pluginsCollection.collection;
+				pluginsCollection.refresh();
+			}
+			
+			public function show():void
+			{
+				context.selectedChannel = new ChannelContext();
+				
+				PopUpManager.addPopUp(this, FlexGlobals.topLevelApplication as Application, true);
+				PopUpManager.centerPopUp(this);
+			}
+			
+			public function hide():void
+			{
+				context.selectedChannel = null;
+				
+				PopUpManager.removePopUp(this);
+				clear();
+			}
+			
+			protected function onAdd():void
+			{
+				context.selectedChannel.readObject({
+					accountId: context.accountData._id,
+					stationId: stationId,
+					name: nameTxt.text,
+					info: infoTxt.text,
+					genre: genre,
+					type: radioButtonGroup.selectedValue
+				});
+				
+				if (context.selectedChannel.type == 0)
+				{
+					var groupData:GroupData;
+					var g:Array = new Array();
+					
+					for (var i:int = 0;i < context.selectedChannel.groups.length;i ++)
+					{
+						groupData = CollectionUtil.getItemFromCollection("_id", context.selectedChannel.groups[i], context.groups) as GroupData;
+						
+						if (groupData.type != 0)
+							g.push(context.selectedChannel.groups[i]);
+					}
+					
+					context.selectedChannel.groups = g;
+				}
+				
+				if (broadcastTypeCb.selectedItem && !context.selectedChannel.plugin)
+				{
+					context.selectedChannel.plugin = new PluginConfigurationData();
+					context.selectedChannel.plugin.pluginId = broadcastTypeCb.selectedItem._id;
+				}
+				
+				var channelsDataManager:ChannelsDataManager = context.channelsDataManagersBuilder.build();
+				
+				channelsDataManager.addEventListener(MongoDBRestEvent.COMPLETE, onAddChannelComplete);
+				channelsDataManager.addEventListener(MongoDBRestEvent.ERROR, onAddChannelError);
+				channelsDataManager.insertRecord(context.sessionId, context.selectedChannel.data);
+			}
+			
+			private function onAddChannelComplete(e:MongoDBRestEvent):void
+			{
+				e.currentTarget.removeEventListener(MongoDBRestEvent.COMPLETE, onAddChannelComplete);
+				e.currentTarget.removeEventListener(MongoDBRestEvent.ERROR, onAddChannelError);
+				
+				context.channelsDataManagersBuilder.destroy(e.currentTarget as ChannelsDataManager);
+				
+				context.selectedChannel.readObject(e.data);
+				
+				context.channels.addItem(context.selectedChannel);
+				context.channels.refresh();
+				
+				hide();
+			}
+			
+			private function onAddChannelError(e:MongoDBRestEvent):void
+			{
+				e.currentTarget.removeEventListener(MongoDBRestEvent.COMPLETE, onAddChannelComplete);
+				e.currentTarget.removeEventListener(MongoDBRestEvent.ERROR, onAddChannelError);
+				
+				context.channelsDataManagersBuilder.destroy(e.currentTarget as ChannelsDataManager);
+				
+				Alert.show("Error: " + (e.data ? e.data.error : ""));
+			}
+			
+			private function clear():void
+			{
+				nameTxt.text = "";
+				infoTxt.text = "";
+				publicType.selected = true;
+				
+				for (var i:int = 0; i < genres.length;i ++)
+					genres.getItemAt(i).selected = false;
+				
+				genres.refresh();
+				
+				broadcastTypeCb.selectedIndex = 0;
+			}
+			
+			protected function editSettings():void
+			{
+				context.pluginsBuilder.buildConfiguration(broadcastTypeCb.selectedItem._id);
+			}
+			
+			protected function manageRights():void
+			{
+				manageChannelRightsPanel.show();
+				manageChannelRightsPanel.setData(context.selectedChannel);
+			}
+			
+			private function filterFunction(item:Object):Boolean
+			{
+				return item.type == 1;
+			}
+			
+			//**************************************************************************************************************
+			//**************************************************************************************************************
+			//**************************************************************************************************************
+			
+			private function get genre():String
+			{
+				var g:String = "Unknown";
+				
+				for (var i:int = 0; i < genres.length;i ++)
+				{
+					if (genres.getItemAt(i).selected)
+						g = g == "Unknown" ? genres.getItemAt(i).title : g + "," + genres.getItemAt(i).title;
+				}
+				
+				return g;
+			}
+			
+			//**************************************************************************************************************
+			//**************************************************************************************************************
+			//**************************************************************************************************************
+
+		]]>
+	</fx:Script>
+	
+	<fx:Declarations>
+		<s:RadioButtonGroup id="radioButtonGroup" />
+	</fx:Declarations>
+	
+	<s:VGroup paddingBottom="15" paddingLeft="15" paddingTop="20" paddingRight="15">
+		
+		<s:Label text="Name:" />
+		<s:TextInput id="nameTxt" width="350" />
+		
+		<s:Label text="Info:" paddingTop="10"/>
+		<s:TextArea id="infoTxt" width="350" height="80" />
+		
+		<s:Label text="Genre:" paddingTop="10"/>
+		<s:Group>
+			<s:List width="350" itemRenderer="soundshare.station.content.pages.station.panels.playlists.panels.renderers.GenreRender"
+					dataProvider="{genres}"
+					selectionColor="0xFFFFFF"
+					rollOverColor="0xFFFFFF"
+					borderVisible="false">
+				<s:layout>
+					<s:TileLayout requestedColumnCount="2" />
+				</s:layout>
+			</s:List>
+		</s:Group>
+		
+		<s:Label text="Type:" paddingTop="10"/>
+		<s:HGroup>
+			<s:RadioButton id="publicType" label="public" value="0" group="{radioButtonGroup}" selected="true" />
+			<s:RadioButton label="private" value="1" group="{radioButtonGroup}" />
+			<s:RadioButton label="invisible" value="2" group="{radioButtonGroup}" />
+			<s:Button label="Manage rights" enabled="{radioButtonGroup.selectedValue != 0}" 
+					  click="manageRights()"/>
+		</s:HGroup>
+		
+		<s:Label text="Broadcast type:" paddingTop="15"/>
+		<s:HGroup>
+			<s:ComboBox id="broadcastTypeCb" dataProvider="{pluginsCollection}" width="250" labelField="name" selectedIndex="0"
+						prompt="Select broadcast type..."/>
+			<s:Button label="Settings" click="editSettings()" enabled="{broadcastTypeCb.selectedIndex != -1}" />
+		</s:HGroup>
+		
+		<s:HGroup paddingTop="5">
+			<s:Button label="Add" click="onAdd()" />
+			<s:Button label="Cancel" click="hide()" />
+		</s:HGroup>
+		
+	</s:VGroup>
+	
+</s:Panel>

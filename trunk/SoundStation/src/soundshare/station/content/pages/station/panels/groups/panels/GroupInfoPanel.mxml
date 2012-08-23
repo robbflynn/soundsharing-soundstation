@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Panel xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx"
+		 title="Edit channel"
+		 xmlns:general="content.pages.station.panels.channels.panels.general.*" 
+		 xmlns:broadcast="content.pages.station.panels.channels.panels.broadcast.*">
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.core.FlexGlobals;
+			import mx.managers.PopUpManager;
+			
+			import soundshare.station.data.StationContext;
+			import soundshare.station.data.PanelsContext;
+			import soundshare.station.data.groups.GroupData;
+			
+			import spark.components.Application;
+			
+			[Bindable] private var context:StationContext;
+			[Bindable] private var panelsContext:PanelsContext;
+			
+			[Bindable] private var groupData:GroupData;
+			
+			public function init(context:StationContext, panelsContext:PanelsContext):void
+			{
+				this.context = context;
+				this.panelsContext = panelsContext;
+			}
+			
+			public function setData(groupData:GroupData):void
+			{
+				this.groupData = groupData;
+				
+				nameTxt.text = groupData.name;
+				
+				switch (groupData.type)
+				{
+					case 0:
+						infoTxt.text = groupData.info;
+						break;
+					case 1:
+						infoTxt.text = "This is channel group and it's can't be deleted!";
+						break;
+					case 2:
+						infoTxt.text = "This is channel group and it's can't be deleted!";
+						break;
+				}
+			}
+			
+			public function show():void
+			{
+				PopUpManager.addPopUp(this, FlexGlobals.topLevelApplication as Application, true);
+				PopUpManager.centerPopUp(this);
+			}
+			
+			protected function close():void
+			{
+				PopUpManager.removePopUp(this);
+			}
+			
+			protected function jointToGroup():void
+			{
+				panelsContext.joinToGroupsRequestPanel.show();
+				panelsContext.joinToGroupsRequestPanel.setData(groupData);
+			}
+			
+		]]>
+	</fx:Script>
+
+	
+	<s:VGroup paddingBottom="15" paddingLeft="15" paddingTop="20" paddingRight="15">
+		
+		<s:Label text="Name:" />
+		<s:TextInput id="nameTxt" width="350" editable="false" />
+		
+		<s:Label text="Info:" paddingTop="10"/>
+		<s:TextArea id="infoTxt" width="350" height="80" editable="false" />
+		
+		<s:HGroup paddingTop="5">
+			<s:Button label="Close" click="close()" />
+			<s:Button label="Send join to group request" click="jointToGroup()"/>
+		</s:HGroup>
+		
+	</s:VGroup>
+	
+</s:Panel>

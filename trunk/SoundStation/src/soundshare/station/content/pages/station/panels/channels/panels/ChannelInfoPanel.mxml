@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Panel xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx"
+		 title="Edit channel"
+		 xmlns:general="content.pages.station.panels.channels.panels.general.*" 
+		 xmlns:broadcast="content.pages.station.panels.channels.panels.broadcast.*">
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.core.FlexGlobals;
+			import mx.managers.PopUpManager;
+			
+			import soundshare.station.data.StationContext;
+			import soundshare.station.data.channels.ChannelContext;
+			import soundshare.station.data.groups.GroupData;
+			
+			import spark.components.Application;
+			
+			[Bindable] private var context:StationContext;
+			[Bindable] private var groupsCollection:ArrayCollection = new ArrayCollection();
+			
+			[Bindable] private var channelContext:ChannelContext;
+			[Bindable] private var channelType:String;
+			
+			public function init(context:StationContext):void
+			{
+				this.context = context;
+				
+				groupsCollection.filterFunction = filterFunction;
+				groupsCollection.refresh();
+			}
+			
+			public function setData(value:ChannelContext):void
+			{
+				channelContext = value;
+				
+				nameTxt.text = channelContext.name;
+				infoTxt.text = channelContext.info;
+				
+				channelType = context.playlistTypes[channelContext.type];
+				
+				var groupData:GroupData;
+				
+				for (var i:int = 0;i < channelContext.groups.length;i ++)
+				{
+					groupData = getGroupById(channelContext.groups[i]);
+					groupsCollection.addItem(groupData);
+				}
+			}
+			
+			private function getGroupById(id:String):GroupData
+			{
+				for (var i:int = 0;i < context.groups.length;i ++)
+					if ((context.groups.getItemAt(i) as GroupData)._id == id)
+						return context.groups.getItemAt(i) as GroupData;
+				
+				return null;
+			}
+			
+			public function show():void
+			{
+				PopUpManager.addPopUp(this, FlexGlobals.topLevelApplication as Application, true);
+				PopUpManager.centerPopUp(this);
+			}
+			
+			protected function close():void
+			{
+				PopUpManager.removePopUp(this);
+				
+				groupsCollection.removeAll();
+			}
+			
+			private function filterFunction(item:Object):Boolean
+			{
+				return item.type == 0;
+			}
+			
+		]]>
+	</fx:Script>
+
+	
+	<s:VGroup paddingBottom="15" paddingLeft="15" paddingTop="20" paddingRight="15">
+		
+		<s:Label text="Name:" />
+		<s:TextInput id="nameTxt" width="350" editable="false" />
+		
+		<s:Label text="Info:" paddingTop="10"/>
+		<s:TextArea id="infoTxt" width="350" height="80" editable="false" />
+		
+		<s:Label text="Genre: {channelContext.genre}" paddingTop="10"/>
+		
+		<s:Label text="Type: {channelType}" paddingTop="10"/>
+		
+		<mx:DataGrid id="groupsCollectionGrid" dataProvider="{groupsCollection}" width="100%" 
+					 rowCount="4">
+			<mx:columns>
+				<mx:DataGridColumn dataField="name" headerText="Name"  />
+			</mx:columns>
+		</mx:DataGrid>
+		
+		<s:HGroup paddingTop="5">
+			<s:Button label="Close" click="close()" />
+		</s:HGroup>
+		
+	</s:VGroup>
+	
+</s:Panel>

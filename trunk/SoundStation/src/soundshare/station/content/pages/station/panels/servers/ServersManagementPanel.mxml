@@ -1,0 +1,131 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Panel xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx"
+		 xmlns:paginators="soundshare.station.components.paginators.*"
+		 width="650"
+		 height="400"
+		 title="Broadcast servers">
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.controls.Alert;
+			import mx.controls.dataGridClasses.DataGridColumn;
+			import mx.core.FlexGlobals;
+			import mx.managers.PopUpManager;
+			
+			import soundshare.sdk.data.servers.ServerData;
+			import soundshare.sdk.db.mongo.base.events.MongoDBRestEvent;
+			import soundshare.sdk.db.mongo.servers.ServersDataManager;
+			import soundshare.station.content.pages.station.panels.servers.panels.AddServerPanel;
+			import soundshare.station.content.pages.station.panels.servers.panels.EditServerPanel;
+			import soundshare.station.data.StationContext;
+			
+			import spark.components.Application;
+			
+			[Bindable] private var context:StationContext;
+			[Bindable] private var serversCollection:ArrayCollection = new ArrayCollection();
+			
+			private var addServerPanel:AddServerPanel;
+			private var editServerPanel:EditServerPanel;
+			
+			public function init(context:StationContext):void
+			{
+				this.context = context;
+				
+				addServerPanel = new AddServerPanel();
+				addServerPanel.init(context);
+				
+				editServerPanel = new EditServerPanel();
+				editServerPanel.init(context);
+			}
+			
+			public function show():void
+			{
+				PopUpManager.addPopUp(this, FlexGlobals.topLevelApplication as Application, true);
+				PopUpManager.centerPopUp(this);
+			}
+			
+			protected function close():void
+			{
+				PopUpManager.removePopUp(this);
+			}
+			
+			protected function addServer():void
+			{
+				addServerPanel.show();
+			}
+			
+			protected function editServer():void
+			{
+				editServerPanel.show();
+				editServerPanel.setData(groupsGrid.selectedItem as ServerData);
+			}
+			
+			protected function removeServer():void
+			{
+				var serversDataManager:ServersDataManager = context.serversDataManagersBuilder.build();
+				
+				serversDataManager.addEventListener(MongoDBRestEvent.COMPLETE, onRemoveServerComplete);
+				serversDataManager.addEventListener(MongoDBRestEvent.ERROR, onRemoveServerError);
+				serversDataManager.deleteRecord(context.sessionId, {_id: groupsGrid.selectedItem._id});
+			}
+			
+			private function onRemoveServerComplete(e:MongoDBRestEvent):void
+			{
+				trace("onRemoveServerComplete:");
+				
+				e.currentTarget.removeEventListener(MongoDBRestEvent.COMPLETE, onRemoveServerComplete);
+				e.currentTarget.removeEventListener(MongoDBRestEvent.ERROR, onRemoveServerError);
+				
+				context.serversDataManagersBuilder.destroy(e.currentTarget as ServersDataManager);
+				
+				serversCollection.removeItemAt(serversCollection.getItemIndex(groupsGrid.selectedItem));
+				serversCollection.refresh();
+				
+				Alert.show("Server is deleted!");
+			}
+			
+			private function onRemoveServerError(e:MongoDBRestEvent):void
+			{
+				e.currentTarget.removeEventListener(MongoDBRestEvent.COMPLETE, onRemoveServerComplete);
+				e.currentTarget.removeEventListener(MongoDBRestEvent.ERROR, onRemoveServerError);
+				
+				context.serversDataManagersBuilder.destroy(e.currentTarget as ServersDataManager);
+				
+				Alert.show("Error delete!");
+			}
+			
+			//**************************************************************************************************************
+			//**************************************************************************************************************
+			//**************************************************************************************************************
+			
+		]]>
+	</fx:Script>
+	
+	<s:VGroup width="100%" height="100%" paddingBottom="10" paddingLeft="10" paddingRight="10" paddingTop="10">
+		
+		<s:Group width="100%">
+			<s:HGroup>
+				<s:Button label="Add server" click="addServer()" />
+				<s:Button label="Edit server" click="editServer()" enabled="{groupsGrid.selectedItem}" />
+				<s:Button label="Delete server" click="removeServer()" enabled="{groupsGrid.selectedItem}" />
+			</s:HGroup>
+		</s:Group>
+		
+		<mx:DataGrid id="groupsGrid" dataProvider="{context.servers}" width="100%" height="100%"
+					 doubleClickEnabled="true"
+					 doubleClick="editServer()">
+			<mx:columns>
+				<mx:DataGridColumn dataField="name" headerText="Name"  />
+				<mx:DataGridColumn dataField="secureId" headerText="Secure ID"  />
+				<mx:DataGridColumn dataField="online" headerText="Online"  />
+			</mx:columns>
+		</mx:DataGrid>
+		
+		<s:Button label="Close" click="close()" />
+		
+	</s:VGroup>
+		
+</s:Panel>

@@ -1,0 +1,119 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Panel xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx"
+		 title="Edit playlist songs">
+	
+	<fx:Script>
+		<![CDATA[
+			import data.ApplicationContext;
+			import data.platlists.PlaylistContext;
+			
+			import managers.playlists.events.PlaylistsManagerEvent;
+			
+			import mx.collections.ArrayCollection;
+			import mx.controls.Alert;
+			import mx.core.FlexGlobals;
+			import mx.managers.CursorManager;
+			import mx.managers.PopUpManager;
+			
+			import spark.components.Application;
+			
+			import utils.directory.DirectoryReader;
+			
+			[Bindable] private var context:ApplicationContext;
+			
+			[Bindable] private var broadcastTypes:ArrayCollection = new ArrayCollection([
+				{title: "Select broadcast mode...", value: -1},
+				{title: "Standard radio broadcast", value: 0}
+			]);
+			
+			[Bindable] private var playlistCollection:ArrayCollection = new ArrayCollection();
+			
+			private var playlistContext:PlaylistContext
+			
+			public function init(context:ApplicationContext):void
+			{
+				this.context = context;
+			}
+			
+			public function setData(playlistContext:PlaylistContext):void
+			{
+				this.playlistCollection.removeAll();
+				this.playlistContext = playlistContext;
+				
+				if (playlistContext.total > 0)
+					loadPlaylist();
+			}
+			
+			//**************************************************************************************************************
+			// 												SONGS VIEW FUNCITON
+			//**************************************************************************************************************
+			
+			protected function loadPlaylist():void
+			{
+				enabled = false;
+				CursorManager.setBusyCursor();
+				
+				context.playlistsManager.addSocketEventListener(PlaylistsManagerEvent.LOAD_PLAYLIST_FILE_COMPLETE, onLoadPlaylistFileComplete);
+				context.playlistsManager.addSocketEventListener(PlaylistsManagerEvent.LOAD_PLAYLIST_FILE_ERROR, onLoadPlaylistFileError);
+				context.playlistsManager.loadPlaylistFile(playlistContext._id);
+			}
+			
+			private function onLoadPlaylistFileComplete(e:PlaylistsManagerEvent):void
+			{
+				context.playlistsManager.removeSocketEventListener(PlaylistsManagerEvent.LOAD_PLAYLIST_FILE_COMPLETE, onLoadPlaylistFileComplete);
+				context.playlistsManager.removeSocketEventListener(PlaylistsManagerEvent.LOAD_PLAYLIST_FILE_ERROR, onLoadPlaylistFileError);
+				
+				playlistCollection.addAll(new ArrayCollection(e.playlist));
+				
+				enabled = true;
+				CursorManager.removeBusyCursor();
+			}
+			
+			private function onLoadPlaylistFileError(e:PlaylistsManagerEvent):void
+			{
+				context.playlistsManager.removeSocketEventListener(PlaylistsManagerEvent.LOAD_PLAYLIST_FILE_COMPLETE, onLoadPlaylistFileComplete);
+				context.playlistsManager.removeSocketEventListener(PlaylistsManagerEvent.LOAD_PLAYLIST_FILE_ERROR, onLoadPlaylistFileError);
+				
+				enabled = true;
+				CursorManager.removeBusyCursor();
+				
+				Alert.show("Load error");
+			}
+			
+			public function show():void
+			{
+				PopUpManager.addPopUp(this, FlexGlobals.topLevelApplication as Application, true);
+				PopUpManager.centerPopUp(this);
+			}
+			
+			public function close():void
+			{
+				PopUpManager.removePopUp(this);
+			}
+			
+		]]>
+	</fx:Script>
+	
+	<s:VGroup paddingBottom="15" paddingLeft="15" paddingRight="15" paddingTop="15">
+		
+		<s:HGroup>
+			<!--<s:Button label="Add song(s)" click="addSongs()" />
+			<s:Button label="Remove song(s)" click="removeSongs()" enabled="{songsGrid.selectedItem}" />
+			<s:Button label="Remove all songs" click="removeAllSongs()" enabled="{songsGrid.selectedItem}" />
+			<s:Button label="Save" click="saveSongs()" enabled="{playlistCollection.length &gt; 0}" />
+			<s:Button label="Close" click="close()" />-->
+		</s:HGroup>
+		
+		<s:ComboBox dataProvider="{}" />
+		
+		<mx:DataGrid id="songsGrid" dataProvider="{playlistCollection}" width="750" rowCount="18" allowMultipleSelection="true">
+			<mx:columns>
+				<mx:DataGridColumn dataField="path" headerText="Path" />
+			</mx:columns>
+		</mx:DataGrid>
+		
+	</s:VGroup>
+	
+</s:Panel>

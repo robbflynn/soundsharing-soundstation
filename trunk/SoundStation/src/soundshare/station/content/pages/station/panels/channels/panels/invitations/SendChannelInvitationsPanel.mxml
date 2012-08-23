@@ -1,0 +1,167 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Panel xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx"
+		 title="Send invitation"
+		 width="700">
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.controls.Alert;
+			import mx.core.FlexGlobals;
+			import mx.managers.PopUpManager;
+			
+			import soundshare.station.data.StationContext;
+			import soundshare.station.data.channels.ChannelContext;
+			import soundshare.station.data.groups.GroupData;
+			import soundshare.sdk.data.platlists.PlaylistContext;
+			
+			import spark.components.Application;
+			import spark.events.IndexChangeEvent;
+			
+			[Bindable] private var tabs:ArrayCollection = new ArrayCollection([
+				{title: "Group(s) invitation", state: "groups"}, 
+				{title: "User(s) invitation", state: "users"}
+			]);
+			
+			[Bindable] private var context:StationContext;
+			
+			private var channelContext:ChannelContext;
+			
+			[Bindable] private var groupsCollection:ArrayCollection = new ArrayCollection();
+			[Bindable] private var selectedGroupsCollection:ArrayCollection = new ArrayCollection();
+			
+			public function init(context:StationContext):void
+			{
+				this.context = context;
+			}
+			
+			public function show():void
+			{
+				PopUpManager.addPopUp(this, FlexGlobals.topLevelApplication as Application, true);
+				PopUpManager.centerPopUp(this);
+			}
+			
+			public function setData(channelContext:ChannelContext):void
+			{
+				this.channelContext = channelContext;
+				
+				groupsCollection.removeAll();
+				groupsCollection.source = [].concat(context.groups.source);
+				groupsCollection.filterFunction = filterFunction;
+				groupsCollection.refresh();
+			}
+			
+			private function filterFunction(item:Object):Boolean
+			{
+				return item.type == 0;
+			}
+			
+			protected function close():void
+			{
+				PopUpManager.removePopUp(this);
+				
+				groupsCollection.filterFunction = null;
+				groupsCollection.refresh();
+			}
+
+			protected function select():void
+			{
+				if (groupsGrid.selectedItem)
+				{
+					var item:GroupData = groupsCollection.removeItemAt(groupsGrid.selectedIndex) as GroupData;
+					selectedGroupsCollection.addItem(item);
+				}
+			}
+			
+			protected function deselect():void
+			{
+				if (selectedGroupsGrid.selectedItem)
+				{
+					var item:GroupData = selectedGroupsCollection.removeItemAt(selectedGroupsGrid.selectedIndex) as GroupData;
+					groupsCollection.addItem(item);
+				}
+			}
+			
+			public function get groupData():GroupData
+			{
+				return groupsGrid.selectedItem as GroupData;
+			}
+			
+			protected function onSelectTab(event:IndexChangeEvent):void
+			{
+				currentState = tab.selectedItem.state;
+			}
+			
+		]]>
+	</fx:Script>
+	
+	<s:states>
+		<s:State name="groups" />
+		<s:State name="users" />
+	</s:states>
+	
+	<s:VGroup width="100%" height="100%" paddingBottom="15" paddingLeft="15" paddingTop="10" paddingRight="15"
+			  gap="10">
+		
+		<s:VGroup width="100%" gap="0">
+			<s:TabBar id="tab" dataProvider="{tabs}" labelField="title" change="onSelectTab(event)" />
+			
+			<s:Group width="100%" height="100%">
+				
+				<s:Rect width="100%" height="100%">
+					<s:stroke>
+						<s:SolidColorStroke color="0x333333" />
+					</s:stroke>
+				</s:Rect>
+				
+				<s:VGroup width="100%" paddingBottom="10" paddingLeft="10" paddingTop="15" paddingRight="10">
+					
+					<s:Label text="Invitation text:" />
+					<s:TextArea width="100%" height="70" />
+					
+					<s:HGroup width="100%" paddingTop="5">
+						
+						<s:VGroup width="50%">
+							<s:Label text="Groups:" />
+							
+							<mx:DataGrid id="groupsGrid" dataProvider="{groupsCollection}" width="100%" height="100%"
+										 doubleClickEnabled="true"
+										 doubleClick="select()"
+										 rowCount="6">
+								<mx:columns>
+									<mx:DataGridColumn dataField="name" headerText="Name"  />
+								</mx:columns>
+							</mx:DataGrid>
+							<s:Button label="Add to invitation list" click="select()" enabled="{groupsGrid.selectedItem}" />
+						</s:VGroup>
+						
+						<s:VGroup width="50%">
+							<s:Label text="Selected groups" />
+							
+							<mx:DataGrid id="selectedGroupsGrid" dataProvider="{selectedGroupsCollection}" width="100%" height="100%"
+										 doubleClickEnabled="true"
+										 doubleClick="deselect()"
+										 rowCount="6">
+								<mx:columns>
+									<mx:DataGridColumn dataField="name" headerText="Name"  />
+								</mx:columns>
+							</mx:DataGrid>
+							<s:Button label="Remove from invitation list" click="deselect()" enabled="{selectedGroupsGrid.selectedItem}" />
+						</s:VGroup>
+						
+					</s:HGroup>
+				</s:VGroup>
+				
+			</s:Group>
+		</s:VGroup>
+		
+		<s:HGroup>
+			<s:Button label="Send" click="select()" />
+			<s:Button label="Cancel" click="close()" />
+		</s:HGroup>
+		
+	</s:VGroup>
+	
+</s:Panel>

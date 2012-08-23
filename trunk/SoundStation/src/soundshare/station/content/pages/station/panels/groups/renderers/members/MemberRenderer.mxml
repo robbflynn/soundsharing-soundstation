@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:ItemRenderer xmlns:fx="http://ns.adobe.com/mxml/2009" 
+				xmlns:s="library://ns.adobe.com/flex/spark" 
+				xmlns:mx="library://ns.adobe.com/flex/mx" width="100%">
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.events.CloseEvent;
+			
+			import soundshare.station.content.pages.station.panels.groups.renderers.members.events.MemberRendererEvent;
+			import soundshare.station.data.members.MemberData;
+			
+			[Bindable] private var memberData:MemberData;
+			
+			override public function set data(value:Object):void
+			{
+				super.data = value;
+				
+				if (value && value as MemberData)
+				{
+					memberData = value as MemberData;
+				}
+			}
+			
+			protected function onView():void
+			{
+				dispatchEvent(new MemberRendererEvent(MemberRendererEvent.VIEW, memberData));
+			}
+			
+		]]>
+	</fx:Script>
+	
+	<s:states>
+		<s:State name="online" />
+		<s:State name="offline" />
+	</s:states>
+	
+	<s:Rect width="100%" height="100%">
+		<s:fill>
+			<s:SolidColor color="0xffffff" />
+		</s:fill>
+	</s:Rect>
+	
+	<s:Rect width="100%" height="100%">
+		<s:stroke>
+			<s:SolidColorStroke color="0xb7babc" />
+		</s:stroke>
+	</s:Rect>
+	
+	<s:VGroup gap="0" width="100%">
+		
+		<s:Group width="100%" height="71">
+			
+			<s:Rect left="4" right="4" top="4" bottom="4">
+				<s:fill>
+					<s:LinearGradient rotation="90">
+						<s:entries>
+							<s:GradientEntry color="0x434343" ratio="0.00" />
+							<s:GradientEntry color="0x020202" ratio="1" />
+						</s:entries>
+					</s:LinearGradient>
+				</s:fill>
+			</s:Rect>
+			
+			<s:HGroup left="11" verticalCenter="-1" gap="18" verticalAlign="middle">
+				
+				<s:Group width="50" height="50">
+					
+					<s:Rect width="100%" height="100%">
+						<s:fill>
+							<s:SolidColor color="0x333333" />
+						</s:fill>
+					</s:Rect>
+					
+					<s:Rect width="100%" height="100%">
+						<s:stroke>
+							<s:SolidColorStroke color="0x666666" />
+						</s:stroke>
+					</s:Rect>
+					
+				</s:Group>
+				
+				<s:VGroup>
+					<s:Label text="{memberData.memberName}" color="0xFFFFFF" fontWeight="bold" />
+				</s:VGroup>
+				
+			</s:HGroup>
+			
+			<s:HGroup right="20" verticalCenter="0">
+				<s:Button label="View" click="onView()" />
+			</s:HGroup>
+			
+		</s:Group>
+		
+	</s:VGroup>
+	
+</s:ItemRenderer>

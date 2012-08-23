@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx" xmlns:channels="soundshare.station.content.pages.station.panels.search.channels.*" xmlns:playlists="soundshare.station.content.pages.station.panels.search.playlists.*" xmlns:accounts="soundshare.station.content.pages.station.panels.search.accounts.*">
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			
+			import soundshare.station.data.StationContext;
+			import soundshare.station.data.PanelsContext;
+			
+			import spark.events.IndexChangeEvent;
+			
+			[Bindable] private var tabs:ArrayCollection = new ArrayCollection([
+				{title: "Channels", state: "channels"}, 
+				{title: "Playlists", state: "playlists"}, 
+				{title: "Users", state: "users"}
+			]);
+			
+			[Bindable] private var context:StationContext;
+			[Bindable] private var panelsContext:PanelsContext;
+			
+			public function init(context:StationContext, panelsContext:PanelsContext):void
+			{
+				this.context = context;
+				this.panelsContext = panelsContext;
+				
+				this.currentState = "channels";
+			}
+			
+			protected function onSelectTab(event:IndexChangeEvent):void
+			{
+				currentState = tab.selectedItem.state;
+			}
+			
+		]]>
+	</fx:Script>
+	
+	<s:states>
+		<s:State name="init" />
+		<s:State name="channels" />
+		<s:State name="playlists" />
+		<s:State name="users" />
+	</s:states>
+	
+	<s:VGroup width="100%" height="100%" paddingBottom="10" paddingLeft="10" paddingRight="10" paddingTop="10">
+		
+		<s:VGroup width="100%" height="100%" gap="0">
+			<s:TabBar id="tab" dataProvider="{tabs}" labelField="title" change="onSelectTab(event)" />
+			
+			<s:Group width="100%" height="100%">
+				
+				<s:Rect width="100%" height="100%">
+					<s:stroke>
+						<s:SolidColorStroke color="0x333333" />
+					</s:stroke>
+				</s:Rect>
+				
+				<channels:ChannelsSearchPanel id="channelsSearchPanel" width="100%" height="100%" includeIn="channels"
+											creationComplete="channelsSearchPanel.init(context, panelsContext)"/>
+				
+				<playlists:PlaylistsSearchPanel id="playlistsSearchPanel" width="100%" height="100%" includeIn="playlists"
+											creationComplete="playlistsSearchPanel.init(context, panelsContext)"/>
+				
+				<accounts:AccountsSearchPanel id="accountsSearchPanel" width="100%" height="100%" includeIn="users"
+											creationComplete="accountsSearchPanel.init(context, panelsContext)"/>
+				
+			</s:Group>
+		</s:VGroup>
+		
+	</s:VGroup>
+	
+</s:Group>

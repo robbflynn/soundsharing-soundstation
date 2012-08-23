@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx"
+		 width="100%"
+		 height="100%">
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			
+			import soundshare.station.data.StationContext;
+			import soundshare.station.data.PanelsContext;
+			import soundshare.station.data.channels.ChannelContext;
+			
+			[Bindable] private var context:StationContext;
+			[Bindable] private var panelsContext:PanelsContext;
+			
+			[Bindable] private var channelsCollection:ArrayCollection;
+			[Bindable] private var groupsCollection:ArrayCollection;
+			
+			public function init(context:StationContext, panelsContext:PanelsContext, channelsCollection:ArrayCollection, groupsCollection:ArrayCollection):void
+			{
+				this.context = context;
+				this.panelsContext = panelsContext;
+				
+				this.channelsCollection = channelsCollection;
+				this.groupsCollection = groupsCollection;
+			}
+			
+			private function browseData():void
+			{
+				if (channelsGrid.selectedItem)
+				{
+					panelsContext.channelPlayerPanel.show();
+					panelsContext.channelPlayerPanel.setData(channelsGrid.selectedItem as ChannelContext, groupsCollection);
+				}
+			}
+			
+			private function typeLabelFunc(item:Object, column:DataGridColumn):String 
+			{
+				return context.playlistTypes[item.type];
+			}
+			
+			private function statusLabelFunc(item:Object, column:DataGridColumn):String 
+			{
+				switch (item.status)
+				{
+					case 0:
+						return "Stand by";
+						break;
+					case 1:
+						return "Broadcasting";
+						break;
+				}
+				
+				return "Unknown";
+			}
+			
+			private function genreLabelFunc(item:Object, column:DataGridColumn):String 
+			{
+				if (!item.genre)
+					return "Unknown";
+				
+				return String(item.genre).split(",").join(", ");
+			}
+			
+		]]>
+	</fx:Script>
+	
+	<s:VGroup width="100%" height="100%" paddingBottom="15" paddingLeft="15" paddingRight="15" paddingTop="15">
+		
+		<mx:DataGrid id="channelsGrid" dataProvider="{channelsCollection}" width="100%" height="100%"
+					 doubleClickEnabled="true"
+					 doubleClick="browseData()">
+			<mx:columns>
+				<mx:DataGridColumn dataField="name" headerText="Name"  />
+				<mx:DataGridColumn labelFunction="genreLabelFunc" headerText="Genre"  />
+				<mx:DataGridColumn labelFunction="statusLabelFunc" headerText="Status" textAlign="center" width="100"/>
+				<mx:DataGridColumn labelFunction="typeLabelFunc" headerText="Type" textAlign="center" width="80"/>
+			</mx:columns>
+		</mx:DataGrid>
+		
+		<s:HGroup>
+			<s:Button label="View channel info" click="browseData()" />
+		</s:HGroup>
+		
+	</s:VGroup>
+	
+</s:Group>

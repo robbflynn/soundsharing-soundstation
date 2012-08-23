@@ -1,0 +1,181 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:DataRenderer xmlns:fx="http://ns.adobe.com/mxml/2009" 
+				xmlns:s="library://ns.adobe.com/flex/spark" 
+				xmlns:mx="library://ns.adobe.com/flex/mx" width="100%"
+				currentStateChange="itemrenderer1_currentStateChangeHandler(event)"
+				creationComplete="itemrenderer1_creationCompleteHandler(event)">
+	
+	<fx:Script>
+		<![CDATA[
+			import data.channels.ChannelContext;
+			
+			import mx.events.FlexEvent;
+			import mx.events.StateChangeEvent;
+			
+			import spark.components.IItemRenderer;
+			
+			[Bindable] private var channelContext:ChannelContext;
+			[Bindable] private var opened:Boolean = false;
+			
+			override public function set data(value:Object):void
+			{
+				super.data = value;
+				
+				if (value && value as ChannelContext)
+					channelContext = value as ChannelContext;
+			}
+			
+			protected function open():void
+			{
+				trace("open:", channelContext.broadcastType, opened, currentState);
+				
+				if (!opened)
+				{
+					opened = true;
+					switch (channelContext.broadcastType)
+					{
+						case 0:
+							currentState = "standard";
+							break;
+					}
+				}
+				else
+				{
+					opened = false;
+					currentState = "asdasd";
+				}
+			}
+			
+			/* private var _selected:Boolean = false;
+			
+			public function set selected(value:Boolean):void
+			{
+				_selected = value;
+			}
+			
+			public function get selected():Boolean
+			{
+				return _selected;
+			}
+			
+			private var _itemIndex:int;
+			
+			public function get itemIndex():int
+			{
+				return _itemIndex;
+			}
+			
+			public function set itemIndex(value:int):void
+			{
+				_itemIndex = value;
+			}
+			
+			private var _showsCaret:Boolean = false;
+			
+			public function get showsCaret():Boolean
+			{
+				return _showsCaret;
+			}
+			
+			public function set showsCaret(value:Boolean):void
+			{
+				_showsCaret = value;
+			}
+			
+			private var _dragging:Boolean = false;
+			
+			public function get dragging():Boolean
+			{
+				return _dragging;
+			}
+			
+			public function set dragging(value:Boolean):void
+			{
+				_dragging = value;
+			}
+			
+			private var _label:String = "";
+			
+			public function get label():String
+			{
+				return _label;
+			}
+			
+			public function set label(value:String):void
+			{
+				_label = value;
+			} */
+
+			protected function itemrenderer1_currentStateChangeHandler(event:StateChangeEvent):void
+			{
+				trace("itemrenderer1_currentStateChangeHandler", currentState);
+			}
+
+
+			protected function itemrenderer1_creationCompleteHandler(event:FlexEvent):void
+			{
+				trace("-itemrenderer1_creationCompleteHandler-");
+				currentState = "asdasd";
+			}
+
+		]]>
+	</fx:Script>
+	
+	<s:states>
+		<s:State name="asdasd" />
+		<s:State name="standard" />
+	</s:states>
+	
+	<s:Rect width="100%" height="100%">
+		<s:fill>
+			<s:SolidColor color="0xffffff" />
+		</s:fill>
+	</s:Rect>
+	
+	<s:Rect width="100%" height="100%">
+		<s:stroke>
+			<s:SolidColorStroke color="0xb7babc" />
+		</s:stroke>
+	</s:Rect>
+	
+	<s:VGroup gap="0" width="100%">
+		
+		<s:Group width="100%" height="60" buttonMode="true" mouseChildren="false" 
+				 click="open()">
+			
+			<s:Rect left="4" right="4" top="4" bottom="4">
+				<s:fill>
+					<s:LinearGradient rotation="90">
+						<s:entries>
+							<s:GradientEntry color="0x434343" ratio="0.00" />
+							<s:GradientEntry color="0x020202" ratio="1" />
+						</s:entries>
+					</s:LinearGradient>
+				</s:fill>
+			</s:Rect>
+			
+			<s:Label text="{channelContext.name}" color="0xFFFFFF" left="20" verticalCenter="1" />
+			<s:Label text="{channelContext.broadcastType}" color="0xFFFFFF" right="20" verticalCenter="1" />
+			
+		</s:Group>
+		
+		<s:Group width="100%" includeIn="standard">
+			
+			<s:Rect left="4" right="4" top="0" bottom="4">
+				<s:fill>
+					<s:LinearGradient rotation="90">
+						<s:entries>
+							<s:GradientEntry color="0xebebeb" ratio="0.00" />
+							<s:GradientEntry color="0xf9f9f9" ratio="1" />
+						</s:entries>
+					</s:LinearGradient>
+				</s:fill>
+			</s:Rect>
+			
+			<s:Group height="250" />
+			
+		</s:Group>
+		
+	</s:VGroup>
+	
+</s:DataRenderer>

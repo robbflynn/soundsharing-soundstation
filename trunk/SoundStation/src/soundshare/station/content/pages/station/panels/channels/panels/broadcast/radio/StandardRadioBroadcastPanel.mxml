@@ -1,0 +1,324 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Panel xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx"
+		 title="Broadcast">
+	
+	<fx:Metadata>
+		[Event(name="startBroadcasting", type="content.pages.station.panels.channels.panels.broadcast.events.BroadcastChannelPanelEvent")]
+		[Event(name="stopBroadcasting", type="content.pages.station.panels.channels.panels.broadcast.events.BroadcastChannelPanelEvent")]
+	</fx:Metadata>
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.controls.Alert;
+			import mx.core.FlexGlobals;
+			import mx.managers.CursorManager;
+			import mx.managers.PopUpManager;
+			
+			import soundshare.station.broadcasts.srb.StandardRadioBroadcast;
+			import soundshare.station.broadcasts.srb.events.StandardRadioBroadcastEvent;
+			import soundshare.station.data.StationContext;
+			import soundshare.station.data.channels.ChannelContext;
+			import soundshare.station.data.channels.broadcasts.StandardRadioContext;
+			import soundshare.station.managers.broadcasts.BroadcastsManager;
+			import soundshare.station.managers.broadcasts.events.BroadcastsManagerEvent;
+			import soundshare.station.utils.debuger.Debuger;
+			import soundshare.sdk.db.mongo.playlists.loader.PlaylistsLoader;
+			import soundshare.sdk.db.mongo.playlists.loader.events.PlaylistsLoaderEvent;
+			
+			import spark.components.Application;
+			
+			[Bindable] private var context:StationContext;
+			[Bindable] private var broadcasting:Boolean = false;
+			
+			[Bindable] private var playlistCollection:ArrayCollection = new ArrayCollection();
+			
+			private var channelContext:ChannelContext;
+			private var standardRadioContext:StandardRadioContext;
+			[Bindable] private var standardRadioBroadcast:StandardRadioBroadcast;
+			
+			private var playlistsLoader:PlaylistsLoader;
+			
+			public function init(context:StationContext):void
+			{
+				this.context = context;
+				
+				playlistsLoader = new PlaylistsLoader();
+				playlistsLoader.context = context;
+			}
+			
+			public function setData(value:ChannelContext):void
+			{
+				channelContext = value;
+				standardRadioContext = channelContext.broadcast as StandardRadioContext;
+				
+				standardRadioBroadcast = context.getBroadcastById(channelContext._id) as StandardRadioBroadcast;
+				
+				trace("1.setData:", standardRadioBroadcast);
+				
+				if (!standardRadioBroadcast)
+				{
+					songsGrid.alpha = 0.5;
+					loadPlaylists();
+				}
+				else
+				{
+					trace("2.setData:", standardRadioBroadcast.playlist.length);
+					
+					songsGrid.alpha = 1;
+					playlistCollection.source = standardRadioBroadcast.playlist;
+				}
+			}
+			
+			public function loadPlaylists():void
+			{
+				playlistsLoader.load(standardRadioContext.playlists);
+				playlistsLoader.addEventListener(PlaylistsLoaderEvent.PLAYLISTS_COMPLETE, onPlaylistsComplete);
+				playlistsLoader.addEventListener(PlaylistsLoaderEvent.PLAYLISTS_ERROR, onPlaylistsError);
+			}
+			
+			private function onPlaylistsComplete(e:PlaylistsLoaderEvent):void
+			{
+				trace("PlaylistsChannel[onPlaylistsComplete]:", e.playlists.length);
+				
+				playlistsLoader.removeEventListener(PlaylistsLoaderEvent.PLAYLISTS_COMPLETE, onPlaylistsComplete);
+				playlistsLoader.removeEventListener(PlaylistsLoaderEvent.PLAYLISTS_ERROR, onPlaylistsError);
+				
+				var playlist:Array = new Array();
+				
+				while (e.playlists.length > 0)
+					playlist = playlist.concat(e.playlists.shift() as Array);
+				
+				trace("PlaylistsChannel[onPlaylistsComplete]:", playlist);
+				
+				playlistCollection.source = playlist;
+			}
+			private function onPlaylistsError(e:PlaylistsLoaderEvent):void
+			{
+				playlistsLoader.removeEventListener(PlaylistsLoaderEvent.PLAYLISTS_COMPLETE, onPlaylistsComplete);
+				playlistsLoader.removeEventListener(PlaylistsLoaderEvent.PLAYLISTS_ERROR, onPlaylistsError);
+				
+				hide();
+				Alert.show("Error loading playlists!");
+			}
+			
+			private function onLoadAudioDataError(e:StandardRadioBroadcastEvent):void
+			{
+				Debuger.error("Error loading audio file!");
+				Debuger.error(playlistCollection.getItemAt(e.songIndex).path);
+				Debuger.show();
+			}
+			
+			private function onChangeSong(e:StandardRadioBroadcastEvent):void
+			{
+				songsGrid.selectedIndex = e.songIndex;
+			}
+			
+			protected function startBroadcast():void
+			{
+				trace("StandardRadioBroadcastPanel[startBroadcast]", standardRadioBroadcast);
+				
+				if (!standardRadioBroadcast)
+				{
+					enabled = false;
+					CursorManager.setBusyCursor();
+					
+					var broadcastsManager:BroadcastsManager = context.broadcastsManagersBuilder.build();
+					
+					broadcastsManager.addEventListener(BroadcastsManagerEvent.CREATE_SRB_COMPLETE, onCreateBroadcastComplete);
+					broadcastsManager.addEventListener(BroadcastsManagerEvent.CREATE_SRB_ERROR, onCreateBroadcastError);
+					broadcastsManager.createStandardRadioBroadcast(channelContext._id);
+				}
+			}
+			
+			private function onCreateBroadcastComplete(e:BroadcastsManagerEvent):void
+			{
+				trace("StandardRadioBroadcastPanel[onCreateBroadcastComplete]", e.broadcast.id);
+				
+				e.currentTarget.removeEventListener(BroadcastsManagerEvent.CREATE_SRB_COMPLETE, onCreateBroadcastComplete);
+				e.currentTarget.removeEventListener(BroadcastsManagerEvent.CREATE_SRB_ERROR, onCreateBroadcastError);
+				
+				context.broadcastsManagersBuilder.destroy(e.currentTarget as BroadcastsManager);
+				
+				broadcasting = true;
+				
+				channelContext.status = 1;
+				context.channels.refresh();
+				
+				standardRadioBroadcast = e.broadcast as StandardRadioBroadcast;
+				standardRadioBroadcast.playlist = [].concat(playlistCollection.source);
+				standardRadioBroadcast.startBroadcasting();
+				
+				songsGrid.alpha = 1;
+				
+				enabled = true;
+				CursorManager.removeBusyCursor();
+			}
+			
+			private function onCreateBroadcastError(e:BroadcastsManagerEvent):void
+			{
+				trace("StandardRadioBroadcastPanel[onCreateBroadcastError]");
+				
+				e.currentTarget.removeEventListener(BroadcastsManagerEvent.CREATE_SRB_COMPLETE, onCreateBroadcastComplete);
+				e.currentTarget.removeEventListener(BroadcastsManagerEvent.CREATE_SRB_ERROR, onCreateBroadcastError);
+				
+				context.broadcastsManagersBuilder.destroy(e.currentTarget as BroadcastsManager);
+				
+				enabled = true;
+				CursorManager.removeBusyCursor();
+				
+				Debuger.error("Error unable to start broadcasting!");
+				Debuger.show();
+			}
+			
+			protected function stopBroadcast():void
+			{
+				trace("StandardRadioBroadcastPanel[stopBroadcast]", standardRadioBroadcast);
+				
+				if (standardRadioBroadcast)
+				{
+					enabled = false;
+					CursorManager.setBusyCursor();
+					
+					var broadcastsManager:BroadcastsManager = context.broadcastsManagersBuilder.build();
+					
+					broadcastsManager.addEventListener(BroadcastsManagerEvent.DESTROY_SRB_COMPLETE, onDestroyBroadcastComplete);
+					broadcastsManager.addEventListener(BroadcastsManagerEvent.DESTROY_SRB_ERROR, onDestroyBroadcastError);
+					broadcastsManager.destroyStandardRadioBroadcast(channelContext._id);
+					
+					
+					/* standardRadioBroadcast.addEventListener(StandardRadioBroadcastEvent.STOP_BROADCASTING_COMPLETE, onStopBroadcastingComplete);
+					standardRadioBroadcast.addEventListener(StandardRadioBroadcastEvent.STOP_BROADCASTING_ERROR, onStopBroadcastingError);
+					standardRadioBroadcast.stopBroadcasting(); */
+				}
+			}
+			
+			private function onDestroyBroadcastComplete(e:BroadcastsManagerEvent):void
+			{
+				trace("StandardRadioBroadcastPanel[onDestroyBroadcastComplete]");
+				
+				e.currentTarget.removeEventListener(BroadcastsManagerEvent.DESTROY_SRB_COMPLETE, onDestroyBroadcastComplete);
+				e.currentTarget.removeEventListener(BroadcastsManagerEvent.DESTROY_SRB_ERROR, onDestroyBroadcastError);
+				
+				context.broadcastsManagersBuilder.destroy(e.currentTarget as BroadcastsManager);
+				
+				broadcasting = false;
+				standardRadioBroadcast = null;
+				
+				songsGrid.alpha = 0.5;
+				
+				channelContext.status = 0;
+				context.channels.refresh();
+				
+				enabled = true;
+				CursorManager.removeBusyCursor();
+			}
+			
+			private function onDestroyBroadcastError(e:BroadcastsManagerEvent):void
+			{
+				trace("StandardRadioBroadcastPanel[onDestroyBroadcastError]");
+				
+				e.currentTarget.removeEventListener(BroadcastsManagerEvent.DESTROY_SRB_COMPLETE, onDestroyBroadcastComplete);
+				e.currentTarget.removeEventListener(BroadcastsManagerEvent.DESTROY_SRB_ERROR, onDestroyBroadcastError);
+				
+				context.broadcastsManagersBuilder.destroy(e.currentTarget as BroadcastsManager);
+				
+				enabled = true;
+				CursorManager.removeBusyCursor();
+				
+				Debuger.error("Error unable to stop broadcasting!");
+				Debuger.show();
+			}
+			
+			public function show():void
+			{
+				PopUpManager.addPopUp(this, FlexGlobals.topLevelApplication as Application, true);
+				PopUpManager.centerPopUp(this);
+			}
+			
+			public function hide():void
+			{
+				PopUpManager.removePopUp(this);
+			}
+			
+			private function close():void
+			{
+				standardRadioBroadcast = null;
+				hide();
+			}
+			
+			//**************************************************************************************************************
+			//**************************************************************************************************************
+			//**************************************************************************************************************
+			
+			protected function onPlaySong():void
+			{
+				trace("#######[onPlaySong]:", songsGrid.selectedItem);
+				
+				if (songsGrid.selectedItem)
+					standardRadioBroadcast.playSong(songsGrid.selectedIndex);
+			}
+			
+			protected function onStopSong():void
+			{
+				standardRadioBroadcast.stopSong();
+			}
+			
+			protected function onPreviousSong():void
+			{
+				standardRadioBroadcast.previousSong();
+			}
+			
+			protected function onNextSong():void
+			{
+				standardRadioBroadcast.nextSong();
+			}
+			
+			protected function onChangePlayOrder():void
+			{
+				standardRadioBroadcast.changePlayOrder(playOrderCb.selectedItem.value);
+			}
+
+		]]>
+	</fx:Script>
+	
+	<s:VGroup paddingBottom="15" paddingLeft="15" paddingTop="20" paddingRight="15">
+		
+		<s:Group width="100%">
+			
+			<s:HGroup>
+				<s:Button label="Start broadcast" click="startBroadcast()" enabled="{standardRadioBroadcast == null}" />
+				<s:Button label="Stop broadcast" click="stopBroadcast()" enabled="{standardRadioBroadcast != null}" />
+				
+				<s:Button label="&lt;" width="40" enabled="{songsGrid.selectedItem &amp;&amp; broadcasting}"
+						  click="onPreviousSong()" />
+				<s:Button label="Play" enabled="{songsGrid.selectedItem &amp;&amp; broadcasting}" 
+						  click="onPlaySong()"/>
+				<s:Button label="Stop" enabled="{songsGrid.selectedItem &amp;&amp; broadcasting}" 
+						  click="onStopSong()"/>
+				<s:Button label="&gt;" width="40" enabled="{songsGrid.selectedItem &amp;&amp; broadcasting}"
+						  click="onNextSong()" />
+				<s:Button label="Close" click="close()" />
+			</s:HGroup>
+			
+			<s:HGroup right="0" verticalAlign="middle">
+				<s:Label text="Order:" paddingLeft="20" />
+				<s:ComboBox id="playOrderCb" dataProvider="{context.playOrders}" labelField="title" selectedIndex="0"
+							change="onChangePlayOrder()"/>
+			</s:HGroup>
+			
+		</s:Group>
+		
+		<mx:DataGrid id="songsGrid" dataProvider="{playlistCollection}" width="750" rowCount="16"
+					 doubleClickEnabled="true" enabled="{broadcasting}"
+					 doubleClick="onPlaySong()">
+			<mx:columns>
+				<mx:DataGridColumn dataField="path" headerText="Path" />
+			</mx:columns>
+		</mx:DataGrid>
+		
+	</s:VGroup>
+	
+</s:Panel>

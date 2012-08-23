@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx"
+		 width="100%"
+		 height="100%">
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			
+			import soundshare.station.data.StationContext;
+			import soundshare.station.data.PanelsContext;
+			import soundshare.sdk.data.platlists.PlaylistContext;
+			
+			[Bindable] private var context:StationContext;
+			[Bindable] private var panelsContext:PanelsContext;
+			
+			[Bindable] private var playlistsCollection:ArrayCollection;
+			[Bindable] private var groupsCollection:ArrayCollection;
+			
+			public function init(context:StationContext, panelsContext:PanelsContext, playlistsCollection:ArrayCollection, groupsCollection:ArrayCollection):void
+			{
+				this.context = context;
+				this.panelsContext = panelsContext;
+				
+				this.playlistsCollection = playlistsCollection;
+				this.groupsCollection = groupsCollection;
+			}
+			
+			private function browseData():void
+			{
+				if (playlistsGrid.selectedItem)
+				{
+					panelsContext.playlistPlayerPanel.show();
+					panelsContext.playlistPlayerPanel.setData(playlistsGrid.selectedItem as PlaylistContext, groupsCollection);
+				}
+			}
+			
+			private function typeLabelFunc(item:Object, column:DataGridColumn):String 
+			{
+				return context.playlistTypes[item.type];
+			}
+			
+			private function genreLabelFunc(item:Object, column:DataGridColumn):String 
+			{
+				return item.genre ? String(item.genre).split(",").join(", ") : "Unknown";
+			}
+			
+		]]>
+	</fx:Script>
+	
+	<s:VGroup width="100%" height="100%" paddingBottom="15" paddingLeft="15" paddingRight="15" paddingTop="15">
+		
+		<mx:DataGrid id="playlistsGrid" dataProvider="{playlistsCollection}" width="100%" height="100%"
+					 doubleClickEnabled="true"
+					 doubleClick="browseData()">
+			<mx:columns>
+				<mx:DataGridColumn dataField="name" headerText="Name"  />
+				<mx:DataGridColumn labelFunction="genreLabelFunc" headerText="Genre"  />
+				<mx:DataGridColumn labelFunction="typeLabelFunc" headerText="Type" textAlign="center" width="80"/>
+				<mx:DataGridColumn dataField="total" headerText="Total" textAlign="center" width="120"/>
+			</mx:columns>
+		</mx:DataGrid>
+		
+		<s:HGroup>
+			<s:Button label="View playlist info" click="browseData()" />
+		</s:HGroup>
+		
+	</s:VGroup>
+	
+</s:Group>

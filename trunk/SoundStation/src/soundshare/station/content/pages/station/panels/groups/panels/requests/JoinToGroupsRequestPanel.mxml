@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Panel xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx"
+		 width="100%"
+		 height="100%">
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.controls.Alert;
+			import mx.core.FlexGlobals;
+			import mx.managers.PopUpManager;
+			
+			import soundshare.sdk.db.mongo.base.events.MongoDBRestEvent;
+			import soundshare.sdk.db.mongo.notifications.NotificationsDataManager;
+			import soundshare.station.data.StationContext;
+			import soundshare.station.data.groups.GroupData;
+			
+			import spark.components.Application;
+			
+			[Bindable] private var context:StationContext;
+			[Bindable] private var groupData:GroupData;
+			
+			public function init(context:StationContext):void
+			{
+				this.context = context;
+			}
+			
+			public function setData(groupData:GroupData):void
+			{
+				this.groupData = groupData;
+				
+				messageTxt.text = "";
+			}
+			
+			public function show():void
+			{
+				PopUpManager.addPopUp(this, FlexGlobals.topLevelApplication as Application, true);
+				PopUpManager.centerPopUp(this);
+			}
+			
+			protected function close():void
+			{
+				PopUpManager.removePopUp(this);
+			}
+			
+			private function send():void
+			{
+				var notificationsManager:NotificationsDataManager = context.notificationsDataManagersBuilder.build();
+				
+				notificationsManager.addEventListener(MongoDBRestEvent.COMPLETE, onAddPlaylistComplete);
+				notificationsManager.addEventListener(MongoDBRestEvent.ERROR, onAddPlaylistError);
+				notificationsManager.joinToGroupRequest(context.sessionId, {
+					senderId: context.accountData._id,
+					receiverId: groupData.accountId,
+					groupId: groupData._id,
+					message: messageTxt.text
+				});
+			}
+			
+			private function onAddPlaylistComplete(e:MongoDBRestEvent):void
+			{
+				e.currentTarget.removeEventListener(MongoDBRestEvent.COMPLETE, onAddPlaylistComplete);
+				e.currentTarget.removeEventListener(MongoDBRestEvent.ERROR, onAddPlaylistError);
+				
+				context.notificationsDataManagersBuilder.destroy(e.currentTarget as NotificationsDataManager);
+				
+				close();
+			}
+			
+			private function onAddPlaylistError(e:MongoDBRestEvent):void
+			{
+				e.currentTarget.removeEventListener(MongoDBRestEvent.COMPLETE, onAddPlaylistComplete);
+				e.currentTarget.removeEventListener(MongoDBRestEvent.ERROR, onAddPlaylistError);
+				
+				context.notificationsDataManagersBuilder.destroy(e.currentTarget as NotificationsDataManager);
+				
+				Alert.show("Error!");
+			}
+			
+		]]>
+	</fx:Script>
+	
+	<s:VGroup width="100%" height="100%" paddingBottom="15" paddingLeft="15" paddingRight="15" paddingTop="15">
+		
+		<s:Label text="Group: {groupData.name}" />
+		
+		<s:TextArea id="messageTxt" width="400" height="80" />
+		
+		<s:HGroup>
+			<s:Button label="Send" click="send()" />
+			<s:Button label="Close" click="close()" />
+		</s:HGroup>
+		
+	</s:VGroup>
+	
+</s:Panel>

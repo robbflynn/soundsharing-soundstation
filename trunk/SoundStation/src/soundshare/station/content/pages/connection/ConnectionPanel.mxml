@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Panel xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx">
+	
+	<fx:Metadata>
+		[Event(name="connected", type="content.pages.connection.events.ConnectionPanelEvent")]
+		[Event(name="error", type="content.pages.connection.events.ConnectionPanelEvent")]
+	</fx:Metadata>
+	
+	<fx:Script>
+		<![CDATA[
+			
+			import soundshare.station.data.StationContext;
+			
+			private var context:StationContext;
+			
+			public function init(context:StationContext):void
+			{
+				this.context = context;
+			}
+			
+			public function connect():void
+			{
+				//context.applicationController.connect(urlTxt.text, int(portTxt.text));
+			}
+			
+		]]>
+	</fx:Script>
+	
+	<s:VGroup paddingBottom="15" paddingLeft="25" paddingRight="25" paddingTop="15">
+		<s:HGroup>
+			<s:TextInput id="urlTxt" text="192.168.204.131" width="250" />
+			<s:TextInput id="portTxt" text="9673" width="80" />	
+		</s:HGroup>
+		<s:HGroup paddingTop="10">
+			<s:Button label="connect" click="connect()" />	
+		</s:HGroup>
+	</s:VGroup>
+	
+</s:Panel>

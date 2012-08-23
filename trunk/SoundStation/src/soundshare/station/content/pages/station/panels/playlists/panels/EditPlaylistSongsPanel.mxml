@@ -1,0 +1,267 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Panel xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx"
+		 title="Edit playlist songs">
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.controls.Alert;
+			import mx.core.FlexGlobals;
+			import mx.managers.CursorManager;
+			import mx.managers.PopUpManager;
+			
+			import soundshare.station.data.StationContext;
+			import soundshare.sdk.data.platlists.PlaylistContext;
+			import soundshare.sdk.data.track.TrackData;
+			import soundshare.sdk.db.mongo.base.events.MongoDBRestEvent;
+			import soundshare.sdk.db.mongo.playlists.PlaylistsDataManager;
+			
+			import spark.components.Application;
+			
+			import utils.files.folder.FolderFilesReader;
+			
+			[Bindable] private var context:StationContext;
+			
+			[Bindable] private var playlistCollection:ArrayCollection = new ArrayCollection();
+			
+			private var file:File;
+			private var filesReader:FolderFilesReader;
+			
+			private var playlistContext:PlaylistContext;
+			
+			public function init(context:StationContext):void
+			{
+				this.context = context;
+				
+				filesReader = new FolderFilesReader(["mp3", "wav"]);
+				filesReader.addEventListener(Event.COMPLETE, onCompleteFilesList);
+				
+				file = new File();
+			}
+			
+			public function setData(playlistContext:PlaylistContext):void
+			{
+				this.playlistCollection.removeAll();
+				this.playlistContext = playlistContext;
+				
+				if (playlistContext.total > 0)
+					loadPlaylist();
+			}
+			
+			//**************************************************************************************************************
+			// 												SAVE PLAYLIST SONGS
+			//**************************************************************************************************************
+			
+			protected function saveSongs():void
+			{
+				CursorManager.setBusyCursor();
+				
+				var playlistsDataManager:PlaylistsDataManager = context.playlistsDataManagersBuilder.build();
+				
+				playlistsDataManager.addEventListener(MongoDBRestEvent.COMPLETE, onSavePlaylistFileComplete);
+				playlistsDataManager.addEventListener(MongoDBRestEvent.ERROR, onSavePlaylistFileError);
+				playlistsDataManager.savePlaylistFile(playlistContext._id, playlistCollection.source, "");
+			}
+			
+			private function onSavePlaylistFileComplete(e:MongoDBRestEvent):void
+			{
+				e.currentTarget.removeEventListener(MongoDBRestEvent.COMPLETE, onSavePlaylistFileComplete);
+				e.currentTarget.removeEventListener(MongoDBRestEvent.ERROR, onSavePlaylistFileError);
+				
+				context.playlistsDataManagersBuilder.destroy(e.currentTarget as PlaylistsDataManager);
+				
+				playlistContext.total = playlistCollection.length;
+				
+				context.playlists.refresh();
+				
+				trace("onSavePlaylistFileComplete:", playlistContext.total);
+				
+				CursorManager.removeBusyCursor();
+				Alert.show("Playlist is saved!");
+			}
+			
+			private function onSavePlaylistFileError(e:MongoDBRestEvent):void
+			{
+				e.currentTarget.removeEventListener(MongoDBRestEvent.COMPLETE, onSavePlaylistFileComplete);
+				e.currentTarget.removeEventListener(MongoDBRestEvent.ERROR, onSavePlaylistFileError);
+				
+				context.playlistsDataManagersBuilder.destroy(e.currentTarget as PlaylistsDataManager);
+				
+				CursorManager.removeBusyCursor();
+				Alert.show("Save error");
+			}
+			
+			//**************************************************************************************************************
+			// 												
+			//**************************************************************************************************************
+			
+			protected function loadPlaylist():void
+			{
+				enabled = false;
+				CursorManager.setBusyCursor();
+				
+				var playlistsDataManager:PlaylistsDataManager = context.playlistsDataManagersBuilder.build();
+				
+				playlistsDataManager.addEventListener(MongoDBRestEvent.COMPLETE, onLoadPlaylistFileComplete);
+				playlistsDataManager.addEventListener(MongoDBRestEvent.ERROR, onLoadPlaylistFileError);
+				playlistsDataManager.loadPlaylistFile(playlistContext._id);
+			}
+			
+			private function onLoadPlaylistFileComplete(e:MongoDBRestEvent):void
+			{
+				e.currentTarget.removeEventListener(MongoDBRestEvent.COMPLETE, onLoadPlaylistFileComplete);
+				e.currentTarget.removeEventListener(MongoDBRestEvent.ERROR, onLoadPlaylistFileError);
+				
+				context.playlistsDataManagersBuilder.destroy(e.currentTarget as PlaylistsDataManager);
+				
+				playlistCollection.addAll(new ArrayCollection(e.data as Array));
+				
+				enabled = true;
+				CursorManager.removeBusyCursor();
+			}
+			
+			private function onLoadPlaylistFileError(e:MongoDBRestEvent):void
+			{
+				e.currentTarget.removeEventListener(MongoDBRestEvent.COMPLETE, onLoadPlaylistFileComplete);
+				e.currentTarget.removeEventListener(MongoDBRestEvent.ERROR, onLoadPlaylistFileError);
+				
+				context.playlistsDataManagersBuilder.destroy(e.currentTarget as PlaylistsDataManager);
+				
+				enabled = true;
+				CursorManager.removeBusyCursor();
+				
+				Alert.show("Load error");
+			}
+			
+			protected function removeSongs():void
+			{
+				var arr:Array = songsGrid.selectedItems;
+				
+				while (arr.length > 0)
+					playlistCollection.removeItemAt(playlistCollection.getItemIndex(arr.shift()));
+				
+				context.playlists.refresh();
+			}
+			
+			protected function removeAllSongs():void
+			{
+				playlistCollection.removeAll();
+				playlistCollection.refresh();
+			}
+			
+			protected function addSongs():void
+			{
+				file.browseForDirectory("Select media folder");
+				file.addEventListener(Event.SELECT, onSelectFolder);
+			}
+			
+			private function onSelectFolder(e:Event):void
+			{
+				file.removeEventListener(Event.SELECT, onSelectFolder);
+				filesReader.read(file);
+			}
+			
+			protected function onCompleteFilesList(e:Event):void
+			{
+				var td:TrackData;
+				var files:Array = filesReader.filesPaths;
+				filesReader.clear();
+				
+				for (var i:int = 0;i < files.length;i ++)
+				{
+					td = new TrackData();
+					td.accountId = context.accountData._id;
+					td.stationId = context.stationData._id;
+					
+					playlistCollection.addItem(td);
+				}
+			}
+			
+			public function show():void
+			{
+				PopUpManager.addPopUp(this, FlexGlobals.topLevelApplication as Application, true);
+				PopUpManager.centerPopUp(this);
+			}
+			
+			public function close():void
+			{
+				PopUpManager.removePopUp(this);
+			}
+			
+			protected function onChangeVolume():void
+			{
+				//remotePlaylistListener.volume = volumeSlider.value;
+			}
+			
+			protected function onChangePlayOrder():void
+			{
+				//remotePlaylistListener.changePlayOrder(int(playOrderCb.selectedItem.value));
+			}
+			
+			protected function onNextSong():void
+			{
+				//remotePlaylistListener.nextSong();
+			}
+			
+			protected function onPreviousSong():void
+			{
+				//remotePlaylistListener.previousSong();
+			}
+			
+			protected function onStopSong(event:MouseEvent):void
+			{
+				//remotePlaylistListener.stopSong();
+			}
+			
+			protected function onPlaySong(event:MouseEvent):void
+			{
+				
+			}
+			
+		]]>
+	</fx:Script>
+	
+	<s:VGroup paddingBottom="15" paddingLeft="15" paddingRight="15" paddingTop="15">
+		
+		<s:Group width="100%">
+			
+			<s:HGroup>
+				<s:Button label="&lt;" width="40" enabled="{songsGrid.selectedItem}"
+						  click="onPreviousSong()" />
+				<s:Button label="Play" enabled="{songsGrid.selectedItem}" 
+						  click="onPlaySong(event)"/>
+				<s:Button label="Stop" enabled="{songsGrid.selectedItem}" 
+						  click="onStopSong(event)"/>
+				<s:Button label="&gt;" width="40" enabled="{songsGrid.selectedItem}"
+						  click="onNextSong()" />
+			</s:HGroup>
+			
+			<s:HGroup right="0" verticalAlign="middle">
+				<s:HSlider id="volumeSlider" width="100" value="1" minimum="0" maximum="1" snapInterval="0.01" 
+						   change="onChangeVolume()"/>
+				<s:Label text="Order:" paddingLeft="20" />
+				<s:ComboBox id="playOrderCb" dataProvider="{context.playOrders}" labelField="title" selectedIndex="0" width="80"
+							change="onChangePlayOrder()"/>
+			</s:HGroup>
+			
+		</s:Group>
+			
+		<mx:DataGrid id="songsGrid" dataProvider="{playlistCollection}" width="750" rowCount="18" allowMultipleSelection="true">
+			<mx:columns>
+				<mx:DataGridColumn dataField="path" headerText="Path" />
+			</mx:columns>
+		</mx:DataGrid>
+		
+		<s:HGroup>
+			<s:Button label="Add song(s)" click="addSongs()" />
+			<s:Button label="Remove song(s)" click="removeSongs()" enabled="{songsGrid.selectedItem}" />
+			<s:Button label="Remove all songs" click="removeAllSongs()" enabled="{songsGrid.selectedItem}" />
+			<s:Button label="Save" click="saveSongs()" enabled="{playlistCollection.length &gt; 0}" />
+			<s:Button label="Close" click="close()" />
+		</s:HGroup>
+		
+	</s:VGroup>
+	
+</s:Panel>

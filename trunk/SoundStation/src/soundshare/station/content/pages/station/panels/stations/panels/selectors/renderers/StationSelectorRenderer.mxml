@@ -1,0 +1,121 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:ItemRenderer xmlns:fx="http://ns.adobe.com/mxml/2009" 
+				xmlns:s="library://ns.adobe.com/flex/spark" 
+				xmlns:mx="library://ns.adobe.com/flex/mx" width="100%"
+				currentState="{stationData.online == 0 ? 'offline' : 'online'}">
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.controls.Alert;
+			import mx.events.CloseEvent;
+			
+			import soundshare.station.content.pages.station.panels.stations.panels.selectors.renderers.events.StationSelectorRendererEvent;
+			import soundshare.station.data.stations.StationData;
+			
+			[Bindable] private var stationData:StationData;
+			
+			override public function set data(value:Object):void
+			{
+				if (value && value as StationData)
+					stationData = value as StationData;
+				
+				super.data = value;
+			}
+			
+			protected function shutDownChannel():void
+			{
+				Alert.show("Are you sure?", "Shut down station", Alert.YES | Alert.NO, null, executeShutDownStation);
+			}
+			
+			protected function executeShutDownStation(e:CloseEvent):void
+			{
+				if (e.detail == Alert.YES)
+					dispatchEvent(new StationSelectorRendererEvent(StationSelectorRendererEvent.SHUT_DOWN, stationData));
+			}
+			
+			protected function deleteChannel():void
+			{
+				Alert.show("Are you sure?", "Delete channel", Alert.YES | Alert.NO, null, executeDeleteClient);
+			}
+			
+			private function executeDeleteClient(e:CloseEvent):void
+			{
+				if (e.detail == Alert.YES)
+					dispatchEvent(new StationSelectorRendererEvent(StationSelectorRendererEvent.DELETE, stationData));
+			}
+			
+			private function selectStation():void
+			{
+				dispatchEvent(new StationSelectorRendererEvent(StationSelectorRendererEvent.SELECT, stationData));
+			}
+			
+		]]>
+	</fx:Script>
+	
+	<s:states>
+		<s:State name="online" />
+		<s:State name="offline" />
+	</s:states>
+	
+	<s:Rect width="100%" height="100%">
+		<s:fill>
+			<s:SolidColor color="0xffffff" />
+		</s:fill>
+	</s:Rect>
+	
+	<s:Rect width="100%" height="100%">
+		<s:stroke>
+			<s:SolidColorStroke color="0xb7babc" />
+		</s:stroke>
+	</s:Rect>
+	
+	<s:VGroup gap="0" width="100%">
+		
+		<s:Group width="100%" height="46">
+			
+			<s:Rect left="4" right="4" top="4" bottom="4">
+				<s:fill>
+					<s:LinearGradient rotation="90">
+						<s:entries>
+							<s:GradientEntry color="0x434343" ratio="0.00" />
+							<s:GradientEntry color="0x020202" ratio="1" />
+						</s:entries>
+					</s:LinearGradient>
+				</s:fill>
+			</s:Rect>
+			
+			<s:HGroup left="20" verticalCenter="0" gap="18" verticalAlign="middle">
+				
+				<s:VGroup>
+					<s:HGroup includeIn="online" verticalAlign="middle" left="5" verticalCenter="0">
+						<s:Rect width="12" height="12" radiusX="6" radiusY="6">
+							<s:fill>
+								<s:SolidColor color="0x14c114" />
+							</s:fill>
+						</s:Rect>
+					</s:HGroup>
+					
+					<s:HGroup includeIn="offline" verticalAlign="middle" left="5" verticalCenter="0">
+						<s:Rect width="12" height="12" radiusX="6" radiusY="6">
+							<s:fill>
+								<s:SolidColor color="0xe41a1a" />
+							</s:fill>
+						</s:Rect>
+					</s:HGroup>
+				</s:VGroup>
+				
+				<s:Label text="{stationData.name}" color="0xFFFFFF" fontWeight="bold" paddingTop="2"/>
+				
+			</s:HGroup>
+			
+			<s:HGroup right="20" verticalCenter="0">
+				<s:Button label="Select" click="selectStation()" enabled="{!stationData.online}"/>
+				<s:Button label="Shut down" click="shutDownChannel()" enabled="{stationData.online}"/>
+				<s:Button label="Delete" click="deleteChannel()" enabled="{!stationData.online}"/>
+			</s:HGroup>
+			
+		</s:Group>
+		
+	</s:VGroup>
+	
+</s:ItemRenderer>

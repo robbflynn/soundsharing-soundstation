@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Panel xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx"
+		 title="Login panel">
+	
+	<fx:Metadata>
+		[Event(name="logged", type="soundshare.station.content.pages.login.events.LoginPanelEvent")]
+		[Event(name="error", type="soundshare.station.content.pages.login.events.LoginPanelEvent")]
+		[Event(name="register", type="soundshare.station.content.pages.login.events.LoginPanelEvent")]
+	</fx:Metadata>
+	
+	<fx:Script>
+		<![CDATA[
+			import soundshare.station.content.pages.login.events.LoginPanelEvent;
+			import soundshare.station.controllers.station.events.StationControllerEvent;
+			import soundshare.station.data.StationContext;
+			
+			private var context:StationContext;
+			
+			public function init(context:StationContext):void
+			{
+				this.context = context;
+			}
+			
+			private function login():void
+			{
+				trace("------------login------------");
+				
+				context.stationController.login(usernameTxt.text, passwordTxt.text);
+			}
+			
+			private function register():void
+			{
+				dispatchEvent(new LoginPanelEvent(LoginPanelEvent.REGISTER));
+			}
+			
+		]]>
+	</fx:Script>
+	
+	<s:VGroup paddingBottom="15" paddingLeft="25" paddingRight="25" paddingTop="15">
+		<s:HGroup>
+			<s:VGroup>
+				<s:Label text="Username:" paddingTop="5"/>
+				<s:Label text="Password:" paddingTop="10"/>
+			</s:VGroup>
+			
+			<s:VGroup>
+				<s:TextInput id="usernameTxt" text="test" />
+				<s:TextInput id="passwordTxt" text="1234" />
+			</s:VGroup>
+		</s:HGroup>
+		
+		<s:HGroup paddingTop="10">
+			<s:Button label="Login" click="login()" />
+			<s:Button label="Register" click="register()" />	
+		</s:HGroup>
+		
+	</s:VGroup>
+	
+</s:Panel>

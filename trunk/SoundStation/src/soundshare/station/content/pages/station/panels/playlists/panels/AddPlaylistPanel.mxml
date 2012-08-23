@@ -1,0 +1,200 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Panel xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx"
+		 title="Create playlist">
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.controls.Alert;
+			import mx.core.FlexGlobals;
+			import mx.managers.PopUpManager;
+			
+			import soundshare.station.content.pages.station.panels.playlists.panels.rights.ManagePlaylistRightsPanel;
+			import soundshare.station.data.StationContext;
+			import soundshare.station.data.PanelsContext;
+			import soundshare.station.data.groups.GroupData;
+			import soundshare.sdk.data.platlists.PlaylistContext;
+			import soundshare.sdk.db.mongo.base.events.MongoDBRestEvent;
+			import soundshare.sdk.db.mongo.playlists.PlaylistsDataManager;
+			
+			import spark.components.Application;
+			
+			import utils.collection.CollectionUtil;
+			
+			[Bindable] private var context:StationContext;
+			[Bindable] private var genres:ArrayCollection = new ArrayCollection();
+			
+			private var managePlaylistRightsPanel:ManagePlaylistRightsPanel;
+			
+			private var playlistContext:PlaylistContext;
+			private var stationId:String;
+			
+			public function init(context:StationContext, panelsContext:PanelsContext):void
+			{
+				this.context = context;
+				
+				for (var i:int = 0; i < context.genres.length;i ++)
+					genres.addItem({title: context.genres[i], selected: false});
+				
+				managePlaylistRightsPanel = new ManagePlaylistRightsPanel();
+				managePlaylistRightsPanel.init(context, panelsContext);
+			}
+			
+			public function setData(stationId:String):void
+			{
+				this.stationId = stationId;
+			}
+			
+			protected function onAdd():void
+			{
+				playlistContext.readObject({
+					accountId: context.accountData._id,
+					stationId: stationId,
+					name: nameTxt.text,
+					info: infoTxt.text,
+					genre: genre,
+					type: int(radioButtonGroup.selectedValue),
+					status: 0,
+					total: 0
+				});
+				
+				if (playlistContext.type == 0)
+				{
+					var groupData:GroupData;
+					var g:Array = new Array();
+					
+					for (var i:int = 0;i < playlistContext.groups.length;i ++)
+					{
+						groupData = CollectionUtil.getItemFromCollection("_id", playlistContext.groups[i], context.groups) as GroupData;
+						
+						if (groupData.type != 0)
+							g.push(playlistContext.groups[i]);
+					}
+					
+					playlistContext.groups = g;
+				}
+				
+				var playlistsDataManager:PlaylistsDataManager = context.playlistsDataManagersBuilder.build();
+					
+				playlistsDataManager.addEventListener(MongoDBRestEvent.COMPLETE, onAddPlaylistComplete);
+				playlistsDataManager.addEventListener(MongoDBRestEvent.ERROR, onAddPlaylistError);
+				playlistsDataManager.insertRecord(context.sessionId, playlistContext.data);
+			}
+			
+			private function onAddPlaylistComplete(e:MongoDBRestEvent):void
+			{
+				e.currentTarget.removeEventListener(MongoDBRestEvent.COMPLETE, onAddPlaylistComplete);
+				e.currentTarget.removeEventListener(MongoDBRestEvent.ERROR, onAddPlaylistError);
+				
+				context.playlistsDataManagersBuilder.destroy(e.currentTarget as PlaylistsDataManager);
+				
+				playlistContext.readObject(e.data);
+				
+				context.playlists.addItem(playlistContext);
+				context.playlists.refresh();
+				
+				close();
+			}
+			
+			private function onAddPlaylistError(e:MongoDBRestEvent):void
+			{
+				e.currentTarget.removeEventListener(MongoDBRestEvent.COMPLETE, onAddPlaylistComplete);
+				e.currentTarget.removeEventListener(MongoDBRestEvent.ERROR, onAddPlaylistError);
+				
+				context.playlistsDataManagersBuilder.destroy(e.currentTarget as PlaylistsDataManager);
+				
+				Alert.show("Error!");
+			}
+			
+			private function clear():void
+			{
+				nameTxt.text = "";
+				infoTxt.text = "";
+				publicType.selected = true;
+				
+				for (var i:int = 0; i < genres.length;i ++)
+					genres.getItemAt(i).selected = false;
+				
+				genres.refresh();
+			}
+			
+			private function get genre():String
+			{
+				var g:String = "Unknown";
+				
+				for (var i:int = 0; i < genres.length;i ++)
+				{
+					if (genres.getItemAt(i).selected)
+						g = g == "Unknown" ? genres.getItemAt(i).title : g + "," + genres.getItemAt(i).title;
+				}
+				
+				return g;
+			}
+			
+			public function show():void
+			{
+				PopUpManager.addPopUp(this, FlexGlobals.topLevelApplication as Application, true);
+				PopUpManager.centerPopUp(this);
+				
+				playlistContext = new PlaylistContext();
+			}
+			
+			protected function close():void
+			{
+				PopUpManager.removePopUp(this);
+				clear();
+			}
+			
+			protected function manageRights():void
+			{
+				managePlaylistRightsPanel.show();
+				managePlaylistRightsPanel.setData(playlistContext);
+			}
+
+		]]>
+	</fx:Script>
+	
+	<fx:Declarations>
+		<s:RadioButtonGroup id="radioButtonGroup" />
+	</fx:Declarations>
+	
+	<s:VGroup paddingBottom="15" paddingLeft="15" paddingTop="20" paddingRight="15">
+		
+		<s:Label text="Name:" />
+		<s:TextInput id="nameTxt" width="350" />
+		
+		<s:Label text="Info:" paddingTop="10"/>
+		<s:TextArea id="infoTxt" width="350" height="80" />
+		
+		<s:Label text="Type:" paddingTop="10"/>
+		<s:HGroup>
+			<s:RadioButton id="publicType" label="public" value="0" group="{radioButtonGroup}" selected="true" />
+			<s:RadioButton label="private" value="1" group="{radioButtonGroup}" />
+			<s:RadioButton label="invisible" value="2" group="{radioButtonGroup}" />
+			<s:Button label="Manage rights" enabled="{radioButtonGroup.selectedValue != 0}" 
+					  click="manageRights()"/>
+		</s:HGroup>
+		
+		<s:Label text="Genre:" paddingTop="10"/>
+		<s:Group>
+			<s:List width="350" itemRenderer="soundshare.station.content.pages.station.panels.playlists.panels.renderers.GenreRender"
+					dataProvider="{genres}"
+					selectionColor="0xFFFFFF"
+					rollOverColor="0xFFFFFF"
+					borderVisible="false">
+				<s:layout>
+					<s:TileLayout requestedColumnCount="2" />
+				</s:layout>
+			</s:List>
+		</s:Group>
+		
+		<s:HGroup paddingTop="15">
+			<s:Button label="Add" click="onAdd()" />
+			<s:Button label="Cancel" click="close()" />
+		</s:HGroup>
+		
+	</s:VGroup>
+	
+</s:Panel>

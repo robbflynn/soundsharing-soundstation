@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx"
+		 width="100%"
+		 height="100%">
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.controls.Alert;
+			import mx.core.FlexGlobals;
+			import mx.managers.PopUpManager;
+			
+			import soundshare.sdk.db.mongo.accounts.AccountsDataManager;
+			import soundshare.sdk.db.mongo.base.events.MongoDBRestEvent;
+			import soundshare.station.data.StationContext;
+			import soundshare.station.data.account.AccountData;
+			import soundshare.station.data.channels.ChannelContext;
+			
+			import spark.components.Application;
+			import spark.events.IndexChangeEvent;
+			
+			[Bindable] private var context:StationContext;
+			[Bindable] private var accountData:AccountData;
+			
+			public function init(context:StationContext, accountData:AccountData):void
+			{
+				this.context = context;
+				this.accountData = accountData;
+			}
+			
+		]]>
+	</fx:Script>
+	
+	<s:VGroup width="100%" height="100%" paddingBottom="15" paddingLeft="15" paddingRight="15" paddingTop="15">
+		
+		<s:Label text="Username: {accountData.username}" />
+		
+	</s:VGroup>
+	
+</s:Group>
