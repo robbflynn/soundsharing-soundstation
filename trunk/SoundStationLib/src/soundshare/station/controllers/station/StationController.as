@@ -3,7 +3,7 @@ package soundshare.station.controllers.station
 	import flash.events.Event;
 	import flash.events.EventDispatcher;
 	
-	import socket.client.events.FlashSocketClientEvent;
+	import flashsocket.client.events.FlashSocketClientEvent;
 	
 	import soundshare.station.controllers.station.events.StationControllerEvent;
 	import soundshare.station.data.StationContext;

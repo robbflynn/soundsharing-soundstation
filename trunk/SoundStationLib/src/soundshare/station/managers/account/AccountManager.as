@@ -1,6 +1,6 @@
 package soundshare.station.managers.account
 {
-	import socket.message.FlashSocketMessage;
+	import flashsocket.message.FlashSocketMessage;
 	
 	import soundshare.station.builders.messages.account.AccountManagerMessageBuilder;
 	import soundshare.station.data.StationContext;

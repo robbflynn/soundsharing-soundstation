@@ -112,7 +112,7 @@ package soundshare.station.data
 			pd.namespace = null;
 			pd.version = "0.1";
 			pd.type = 0;
-			pd.filename = "data/soundshare/plugins/manager/remoteplaylist/container/RemotePlaylistPlugin.swf";
+			pd.filename = "data/soundshare/plugins/station/remoteplaylist/container/RemotePlaylistPlugin.swf";
 			
 			pluginsCollection.addPlugin(pd);
 			
@@ -122,7 +122,7 @@ package soundshare.station.data
 			pd.namespace = "sss_standardradioplugin";
 			pd.version = "0.1";
 			pd.type = 1;
-			pd.filename = "data/soundshare/plugins/manager/standardradio/container/StandardRadioPlugin.swf";
+			pd.filename = "data/soundshare/plugins/station/standardradio/container/StandardRadioPlugin.swf";
 			
 			pluginsCollection.addPlugin(pd);
 			

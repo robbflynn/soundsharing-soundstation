@@ -1,7 +1,7 @@
 package soundshare.station.broadcasts.rpb
 {
-	import socket.client.events.FlashSocketClientEvent;
-	import socket.message.FlashSocketMessage;
+	import flashsocket.client.events.FlashSocketClientEvent;
+	import flashsocket.message.FlashSocketMessage;
 	
 	import soundshare.station.broadcasts.rpb.events.RemotePlaylistBroadcastEvent;
 	import soundshare.station.builders.messages.broadcasts.RemotePlaylistBroadcastMessageBuilder2;

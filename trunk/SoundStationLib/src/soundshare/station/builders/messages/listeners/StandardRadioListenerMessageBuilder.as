@@ -1,6 +1,6 @@
 package soundshare.station.builders.messages.listeners
 {
-	import socket.message.FlashSocketMessage;
+	import flashsocket.message.FlashSocketMessage;
 	
 	import soundshare.sdk.managers.events.SecureClientEventDispatcher;
 

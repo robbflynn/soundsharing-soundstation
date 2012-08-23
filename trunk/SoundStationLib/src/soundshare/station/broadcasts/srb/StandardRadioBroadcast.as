@@ -1,6 +1,6 @@
 package soundshare.station.broadcasts.srb
 {
-	import socket.message.FlashSocketMessage;
+	import flashsocket.message.FlashSocketMessage;
 	
 	import soundshare.station.broadcasts.srb.events.StandardRadioBroadcastEvent;
 	import soundshare.station.builders.messages.broadcasts.StandardRadioBroadcastMessageBuilder;

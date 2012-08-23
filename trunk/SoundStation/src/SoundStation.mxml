@@ -21,8 +21,8 @@
 			import mx.controls.Alert;
 			import mx.events.CloseEvent;
 			
-			import socket.client.events.FlashSocketClientEvent;
-			import socket.json.JSONFacade;
+			import flashsocket.client.events.FlashSocketClientEvent;
+			import flashsocket.json.JSONFacade;
 			
 			import soundshare.station.content.pages.station.panels.servers.ServersManagementPanel;
 			import soundshare.station.content.pages.station.panels.stations.StationsManagementPanel;

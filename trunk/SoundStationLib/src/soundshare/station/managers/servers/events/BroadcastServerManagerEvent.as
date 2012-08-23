@@ -1,6 +1,6 @@
 package soundshare.station.managers.servers.events
 {
-	import socket.client.managers.events.events.ClientEventDispatcherEvent;
+	import flashsocket.client.managers.events.events.ClientEventDispatcherEvent;
 	
 	public class BroadcastServerManagerEvent extends ClientEventDispatcherEvent
 	{

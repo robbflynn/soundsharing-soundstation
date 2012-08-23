@@ -3,7 +3,7 @@ package soundshare.station.builders.messages.playlists
 	import flash.utils.ByteArray;
 	import flash.utils.CompressionAlgorithm;
 	
-	import socket.message.FlashSocketMessage;
+	import flashsocket.message.FlashSocketMessage;
 	
 	import soundshare.sdk.data.SoundShareContext;
 	import soundshare.sdk.managers.events.SecureClientEventDispatcher;

@@ -2,8 +2,8 @@ package soundshare.station.builders.messages.broadcasts
 {
 	import flash.utils.ByteArray;
 	
-	import socket.message.FlashSocketMessage;
-	import socket.client.base.ClientSocketUnit;
+	import flashsocket.message.FlashSocketMessage;
+	import flashsocket.client.base.ClientSocketUnit;
 	
 	import soundshare.sdk.data.SoundShareContext;
 	import soundshare.sdk.managers.events.SecureClientEventDispatcher;

@@ -1,6 +1,6 @@
 package soundshare.station.listeners.remote.srb.events
 {
-	import socket.client.managers.events.events.ClientEventDispatcherEvent;
+	import flashsocket.client.managers.events.events.ClientEventDispatcherEvent;
 	
 	public class StandardRadioListenerEvent extends ClientEventDispatcherEvent
 	{

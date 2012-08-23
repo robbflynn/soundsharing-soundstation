@@ -1,6 +1,6 @@
 package soundshare.station.managers.broadcasts
 {
-	import socket.message.FlashSocketMessage;
+	import flashsocket.message.FlashSocketMessage;
 	
 	import soundshare.station.broadcasts.rpb.RemotePlaylistBroadcast;
 	import soundshare.station.broadcasts.rpb.events.RemotePlaylistBroadcastEvent;

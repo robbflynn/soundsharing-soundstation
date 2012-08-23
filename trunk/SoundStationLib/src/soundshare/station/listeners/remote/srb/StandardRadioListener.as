@@ -1,6 +1,6 @@
 package soundshare.station.listeners.remote.srb
 {
-	import socket.message.FlashSocketMessage;
+	import flashsocket.message.FlashSocketMessage;
 	
 	import soundshare.station.builders.messages.listeners.StandardRadioListenerMessageBuilder;
 	import soundshare.station.listeners.remote.srb.events.StandardRadioListenerEvent;

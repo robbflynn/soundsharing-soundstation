@@ -1,7 +1,7 @@
 package soundshare.station.managers.stations
 {
-	import socket.client.builders.message.events.ClientEventMessageBuilder;
-	import socket.message.FlashSocketMessage;
+	import flashsocket.client.builders.message.events.ClientEventMessageBuilder;
+	import flashsocket.message.FlashSocketMessage;
 	
 	import soundshare.station.builders.messages.stations.StationRemoteControlMessageBuilder;
 	import soundshare.station.managers.stations.events.StationRemoteControlEvent;
