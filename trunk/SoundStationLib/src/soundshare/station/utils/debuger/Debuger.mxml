@@ -12,6 +12,8 @@
 			
 			import spark.utils.TextFlowUtil;
 			
+			import utils.date.DateUtil;
+			
 			private var SHIFT_KEY:Boolean = false;
 			private var CTRL_KEY:Boolean = false;
 			
@@ -72,7 +74,7 @@
 				if (debugEnabled)
 				{
 					var str:String = (arg as Array).join(argDivider);
-					text += (text == "" ? "" : "<br/>") + (lineDateEnabled ? "["+(new Date()).toString()+"] " : "") + str;
+					text += (text == "" ? "" : "<br/>") + (lineDateEnabled ? "[" + DateUtil.parseToString(new Date()) +"] " : "") + str;
 					
 					if (traceEnabled)
 						trace(str);
@@ -84,7 +86,7 @@
 				if (debugEnabled)
 				{
 					var str:String = (arg as Array).join(argDivider);
-					text += (text == "" ? "" : "<br/>") + (lineDateEnabled ? "["+(new Date()).toString()+"] " : "") + "<font color='#FF0000'>" + str + "</font>";
+					text += (text == "" ? "" : "<br/>") + (lineDateEnabled ? "[" + DateUtil.parseToString(new Date()) + "] " : "") + "<font color='#FF0000'>" + str + "</font>";
 					
 					if (traceEnabled)
 						trace(str);

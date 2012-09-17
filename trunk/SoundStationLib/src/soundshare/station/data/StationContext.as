@@ -2,6 +2,10 @@ package soundshare.station.data
 {
 	import mx.collections.ArrayCollection;
 	
+	import soundshare.sdk.data.SoundShareContext;
+	import soundshare.sdk.data.platlists.PlaylistContext;
+	import soundshare.sdk.data.plugin.PluginData;
+	import soundshare.sdk.managers.events.SecureClientEventDispatcher;
 	import soundshare.station.broadcasts.base.BaseBroadcast;
 	import soundshare.station.broadcasts.rpb.RemotePlaylistBroadcast;
 	import soundshare.station.broadcasts.srb.StandardRadioBroadcast;
@@ -20,14 +24,12 @@ package soundshare.station.data
 	import soundshare.station.managers.broadcasts.RemoteBroadcastsManager;
 	import soundshare.station.managers.stations.StationRemoteControl;
 	import soundshare.station.utils.settings.application.ApplicationSettings;
-	import soundshare.sdk.data.SoundShareContext;
-	import soundshare.sdk.data.platlists.PlaylistContext;
-	import soundshare.sdk.data.plugin.PluginData;
-	import soundshare.sdk.managers.events.SecureClientEventDispatcher;
+	
+	import utils.math.ExMath;
 
 	public class StationContext extends SoundShareContext
 	{
-		public static const GUEST_ID:String = "#GUEST#";
+		//public static const GUEST_ID:String = "#GUEST#";
 		
 		[Bindable] public var playOrders:ArrayCollection = new ArrayCollection([
 			{title: "Default", value: 0},
@@ -99,8 +101,8 @@ package soundshare.station.data
 		[Bindable] public var selectedPlaylist:PlaylistContext;
 		[Bindable] public var selectedChannel:ChannelContext;
 		
-		private var tmpStationData:StationData;
-		private var guestStationData:StationData;
+		public var stationData:StationData;
+		//private var guestStationData:StationData;
 		
 		public function StationContext()
 		{
@@ -126,12 +128,12 @@ package soundshare.station.data
 			
 			pluginsCollection.addPlugin(pd);
 			
-			guestStationData = new StationData();
-			guestStationData._id = GUEST_ID;
-			guestStationData.name = "Guest"
-			
 			applicationSettings = new ApplicationSettings();
 			applicationSettings.load();
+			
+			/*stationData = new StationData();
+			stationData._id = applicationSettings.settings.guestStationId;
+			stationData.name = "Guest";*/
 			
 			accountManager = new AccountManager(this);
 			accountManager.namespace = "socket.managers.AccountsManager";
@@ -177,18 +179,18 @@ package soundshare.station.data
 			return -1;
 		}
 		
-		public function get stationData():StationData
+		/*public function get stationData():StationData
 		{
 			if (tmpStationData && applicationSettings.settings.stationId == tmpStationData._id)
 				return tmpStationData;
 			
-			if (applicationSettings.settings.stationId == GUEST_ID)
+			if (applicationSettings.settings.stationId == applicationSettings.settings.guestStationId)
 				tmpStationData = guestStationData;
 			else
 				tmpStationData = getItemFromCollection("_id", applicationSettings.settings.stationId, stations) as StationData;
 			
 			return tmpStationData;
-		}
+		}*/
 		
 		public function get totalListeners():int
 		{

@@ -93,8 +93,8 @@
 			
 			private function listenChannel():void
 			{
-				panelsContext.channelPlayerPanel.show();
-				panelsContext.channelPlayerPanel.setData(channelsGrid.selectedItem as ChannelContext);
+				context.selectedChannel = channelsGrid.selectedItem as ChannelContext;
+				context.pluginsBuilder.buildListener(context.selectedChannel.plugin.pluginId);
 			}
 			
 			//**************************************************************************************************************
@@ -113,17 +113,7 @@
 			
 			private function statusLabelFunc(item:Object, column:DataGridColumn):String 
 			{
-				switch (item.status)
-				{
-					case 0:
-						return "Stand by";
-						break;
-					case 1:
-						return "Broadcasting";
-						break;
-				}
-				
-				return "Unknown";
+				return item.active ? "Online" : "Offline";
 			}
 			
 			private function genreLabelFunc(item:Object, column:DataGridColumn):String 

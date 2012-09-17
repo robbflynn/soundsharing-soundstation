@@ -79,7 +79,11 @@
 			{
 				trace("enterAsWathcer");
 				
-				context.applicationSettings.settings.stationId = StationContext.GUEST_ID;
+				context.stationData = new StationData();
+				context.stationData._id = context.applicationSettings.settings.guestStationId;
+				context.stationData.name = "Guest";
+				
+				context.applicationSettings.settings.stationId = context.applicationSettings.settings.guestStationId;
 				context.applicationSettings.save();
 				
 				close();

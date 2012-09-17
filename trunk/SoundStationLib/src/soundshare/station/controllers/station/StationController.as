@@ -5,14 +5,6 @@ package soundshare.station.controllers.station
 	
 	import flashsocket.client.events.FlashSocketClientEvent;
 	
-	import soundshare.station.controllers.station.events.StationControllerEvent;
-	import soundshare.station.data.StationContext;
-	import soundshare.station.data.channels.ChannelContext;
-	import soundshare.station.data.groups.GroupData;
-	import soundshare.station.data.notifications.NotificationData;
-	import soundshare.station.data.stations.StationData;
-	import soundshare.station.managers.account.events.AccountManagerEvent;
-	import soundshare.station.managers.stations.events.StationRemoteControlEvent;
 	import soundshare.sdk.controllers.connection.client.ClientConnection;
 	import soundshare.sdk.controllers.connection.client.events.ClientConnectionEvent;
 	import soundshare.sdk.data.platlists.PlaylistContext;
@@ -28,6 +20,14 @@ package soundshare.station.controllers.station
 	import soundshare.sdk.managers.stations.events.StationsManagerEvent;
 	import soundshare.sdk.plugins.loaders.list.PluginsListLoader;
 	import soundshare.sdk.plugins.loaders.list.events.PluginsListLoaderEvent;
+	import soundshare.station.controllers.station.events.StationControllerEvent;
+	import soundshare.station.data.StationContext;
+	import soundshare.station.data.channels.ChannelContext;
+	import soundshare.station.data.groups.GroupData;
+	import soundshare.station.data.notifications.NotificationData;
+	import soundshare.station.data.stations.StationData;
+	import soundshare.station.managers.account.events.AccountManagerEvent;
+	import soundshare.station.managers.stations.events.StationRemoteControlEvent;
 	
 	import utils.collection.CollectionUtil;
 	
@@ -171,11 +171,23 @@ package soundshare.station.controllers.station
 				context.servers.addItem(serverData);
 			}
 			
-			if (!context.stationData)
+			/*if (tmpStationData && applicationSettings.settings.stationId == tmpStationData._id)
+				return tmpStationData;
+			
+			if (applicationSettings.settings.stationId == applicationSettings.settings.guestStationId)
+				tmpStationData = guestStationData;
+			else*/
+			
+			
+			
+			
+			
+			/*if (!context.stationData)
 			{
 				context.applicationSettings.settings.stationId = null;
 				context.applicationSettings.save();
-			}
+			}*/
+			
 			
 			trace("_id:", e.data.id);
 			trace("token:", e.data.token);
@@ -323,8 +335,6 @@ package soundshare.station.controllers.station
 			
 			// ******************************************************
 			
-			serversWatcherManager = context.serversManagersBuilder.build();
-			
 			var servers:Array = new Array();
 			
 			for (i = 0;i < context.servers.length;i ++)
@@ -334,6 +344,7 @@ package soundshare.station.controllers.station
 			
 			if (servers.length > 0)
 			{
+				serversWatcherManager = context.serversManagersBuilder.build();
 				serversWatcherManager.addSocketEventListener(ServersManagerEvent.START_WATCH_COMPLETE, onStartWatchServersComplete);
 				serversWatcherManager.addSocketEventListener(ServersManagerEvent.START_WATCH_ERROR, onStartWatchServersError);
 				serversWatcherManager.startWatchServers(servers);
@@ -377,10 +388,12 @@ package soundshare.station.controllers.station
 			serversWatcherManager.addSocketEventListener(ServersManagerEvent.SERVER_UP_DETECTED, onServerUpDetected);
 			serversWatcherManager.addSocketEventListener(ServersManagerEvent.SERVER_DOWN_DETECTED, onServerDownDetected);
 			
-			if (context.stationData)
+			/*if (context.stationData)
 				stationUp();
 			else
-				dispatchEvent(new StationControllerEvent(StationControllerEvent.EMITTER_INVALID_STATION));
+				dispatchEvent(new StationControllerEvent(StationControllerEvent.EMITTER_INVALID_STATION));*/
+			
+			stationUp();
 		}
 		
 		protected function onStartWatchServersError(e:ServersManagerEvent):void 
@@ -401,9 +414,18 @@ package soundshare.station.controllers.station
 		
 		public function stationUp():void
 		{
+			/*if (tmpStationData && applicationSettings.settings.stationId == tmpStationData._id)
+				return tmpStationData;
+			
+			if (applicationSettings.settings.stationId == applicationSettings.settings.guestStationId)
+				tmpStationData = guestStationData;
+			else
+				tmpStationData = getItemFromCollection("_id", applicationSettings.settings.stationId, stations) as StationData;*/
+			
+			
 			trace("StationController[stationUp]:");
 			
-			if (context.applicationSettings.settings.stationId != StationContext.GUEST_ID)
+			/*if (context.applicationSettings.settings.stationId != StationContext.GUEST_ID)
 			{
 				tmpUpStationsManager = context.stationsManagersBuilder.build();
 				tmpUpStationsManager.addSocketEventListener(StationsManagerEvent.STATION_UP_COMPLETE, onStationUpComplete);
@@ -411,7 +433,34 @@ package soundshare.station.controllers.station
 				tmpUpStationsManager.stationUp(context.stationData._id);
 			}
 			else
-				onGuestStationUpComplete();
+				onGuestStationUpComplete();*/
+			
+			context.stationData = CollectionUtil.getItemFromCollection("_id", context.applicationSettings.settings.stationId, context.stations) as StationData;
+			
+			if (!context.stationData)
+			{
+				if (context.applicationSettings.settings.stationId == context.applicationSettings.settings.guestStationId)
+				{
+					context.stationData = new StationData();
+					context.stationData._id = context.applicationSettings.settings.guestStationId;
+					context.stationData.name = "Guest";
+				}
+				else
+				{
+					context.applicationSettings.settings.stationId = null;
+					context.applicationSettings.save();
+				}
+			}
+			
+			if (context.stationData)
+			{
+				tmpUpStationsManager = context.stationsManagersBuilder.build();
+				tmpUpStationsManager.addSocketEventListener(StationsManagerEvent.STATION_UP_COMPLETE, onStationUpComplete);
+				tmpUpStationsManager.addSocketEventListener(StationsManagerEvent.STATION_UP_ERROR, onStationUpError);
+				tmpUpStationsManager.stationUp(context.stationData._id);
+			}
+			else
+				dispatchEvent(new StationControllerEvent(StationControllerEvent.EMITTER_INVALID_STATION));
 		}
 		
 		protected function onStationUpComplete(e:StationsManagerEvent):void 
@@ -520,7 +569,7 @@ package soundshare.station.controllers.station
 		{
 			trace("StationController[stationDown]:");
 			
-			if (context.applicationSettings.settings.stationId != StationContext.GUEST_ID)
+			/*if (context.applicationSettings.settings.stationId != StationContext.GUEST_ID)
 			{
 				tmpDownStationsManager = context.stationsManagersBuilder.build();
 				tmpDownStationsManager.addSocketEventListener(StationsManagerEvent.STATION_DOWN_COMPLETE, onStationDownComplete);
@@ -528,7 +577,12 @@ package soundshare.station.controllers.station
 				tmpDownStationsManager.stationDown(context.stationData._id);
 			}
 			else
-				onStationDownComplete(null);
+				onStationDownComplete(null);*/
+			
+			tmpDownStationsManager = context.stationsManagersBuilder.build();
+			tmpDownStationsManager.addSocketEventListener(StationsManagerEvent.STATION_DOWN_COMPLETE, onStationDownComplete);
+			tmpDownStationsManager.addSocketEventListener(StationsManagerEvent.STATION_DOWN_ERROR, onStationDownError);
+			tmpDownStationsManager.stationDown(context.stationData._id);
 		}
 		
 		protected function onStationDownComplete(e:StationsManagerEvent):void 

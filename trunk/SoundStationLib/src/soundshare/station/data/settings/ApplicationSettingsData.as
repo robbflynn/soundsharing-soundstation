@@ -1,6 +1,8 @@
 package soundshare.station.data.settings
 {
 	import soundshare.station.data.stations.StationData;
+	
+	import utils.math.ExMath;
 
 	[Bindable]
 	[RemoteClass]
@@ -20,6 +22,7 @@ package soundshare.station.data.settings
 		public var groupMembersPerPage:Number = 10;
 		
 		public var stationId:String;
+		public var guestStationId:String = ExMath.uuidCompact();
 		
 		public var playlistsStationId:String;
 		public var playlistsStationIndex:int = 0;

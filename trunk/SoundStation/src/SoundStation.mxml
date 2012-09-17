@@ -17,12 +17,12 @@
 					   xmlns:panels="soundshare.station.content.pages.station.panels.stations.panels.*">
 	<fx:Script>
 		<![CDATA[
+			import flashsocket.client.events.FlashSocketClientEvent;
+			import flashsocket.json.JSONFacade;
+			
 			import mx.collections.ArrayCollection;
 			import mx.controls.Alert;
 			import mx.events.CloseEvent;
-			
-			import flashsocket.client.events.FlashSocketClientEvent;
-			import flashsocket.json.JSONFacade;
 			
 			import soundshare.station.content.pages.station.panels.servers.ServersManagementPanel;
 			import soundshare.station.content.pages.station.panels.stations.StationsManagementPanel;
@@ -30,8 +30,8 @@
 			import soundshare.station.content.settings.SettingsPanel;
 			import soundshare.station.controllers.station.StationController;
 			import soundshare.station.controllers.station.events.StationControllerEvent;
-			import soundshare.station.data.StationContext;
 			import soundshare.station.data.PanelsContext;
+			import soundshare.station.data.StationContext;
 			import soundshare.station.data.stations.StationData;
 			import soundshare.station.managers.account.events.AccountManagerEvent;
 			import soundshare.station.utils.debuger.Debuger;
@@ -132,6 +132,8 @@
 			
 			private function onEmitterError(e:StationControllerEvent):void
 			{
+				Debuger.log("onEmitterError", e.errorCode);
+				
 				switch (e.errorCode)
 				{
 					case 101:
@@ -140,6 +142,10 @@
 					case 105:
 						currentState = "stationSettings";
 						Alert.show("Unable to start this station!");		
+						break;
+					case 107:
+						currentState = "login";
+						Alert.show("Unable to load plugins!");		
 						break;
 					default:
 						currentState = "login";
